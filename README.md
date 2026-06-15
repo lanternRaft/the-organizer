@@ -1,0 +1,1 @@
+An HTML, JavaScript and CSS based canvas system for world building
