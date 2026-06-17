@@ -310,6 +310,7 @@ function createHandle(x, y, cursor, onDrag, onDragEnd) {
     e.stopPropagation();
     e.preventDefault();
     if (!selected) return;
+    hideContextMenu();
 
     function onMove(me) {
       const pos = getPos(me);
@@ -595,6 +596,8 @@ svg.addEventListener('mousedown', (e) => {
   // Only on background, left button
   if (e.target !== svg && e.target !== bgRect) return;
   if (e.button !== 0) return;
+
+  hideContextMenu();
 
   const startPos = getPos(e);
   _selBoxStart = startPos;

@@ -6,7 +6,7 @@ import {
   getEllipseEdgePoint, updateArrowPath, setArrowAttrs,
   calculateSignedOffset, startMultiDrag
 } from './helpers.js';
-import { selectElement, showLineHandles, updateLegend } from './select.js';
+import { selectElement, showLineHandles, updateLegend, hideContextMenu } from './select.js';
 
 // Arrow placement state
 let _arrowStart = null;       // { x, y } | null
@@ -173,6 +173,7 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
 
     // Multi-drag: move all selected elements together
     if (selectedSet.size > 1) {
+      hideContextMenu();
       startMultiDrag(e);
       return;
     }
@@ -188,6 +189,7 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
 
     function onMove(me) {
       dragged = true;
+      hideContextMenu();
       const pos = getPos(me);
       const dx = pos.x - startPos.x;
       const dy = pos.y - startPos.y;

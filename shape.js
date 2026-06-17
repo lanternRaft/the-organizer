@@ -7,7 +7,7 @@ import {
   updateOvalTextPosition, updateAnchoredArrows, updateAnchors,
   startMultiDrag, markDragHappened
 } from './helpers.js';
-import { selectElement, deselect, showEllipseHandles, updateLegend, setHideTextInput } from './select.js';
+import { selectElement, deselect, showEllipseHandles, updateLegend, setHideTextInput, hideContextMenu } from './select.js';
 
 // Register our hideTextInput with select module
 let textInput = null;
@@ -164,6 +164,7 @@ export function createShape(x, y) {
     if (selectedSet.size > 1) {
       e.stopPropagation();
       e.preventDefault();
+      hideContextMenu();
       startMultiDrag(e);
       return;
     }
@@ -178,6 +179,7 @@ export function createShape(x, y) {
 
     function onMove(me) {
       dragged = true;
+      hideContextMenu();
       const pos = getPos(me);
       const dx = pos.x - startPos.x;
       const dy = pos.y - startPos.y;
