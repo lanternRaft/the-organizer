@@ -4,7 +4,7 @@
 import { svg, selected, selectedType, currentTool, selectedSet, selectedTypes, shapeMode, INFO, ctxMenu } from './state.js';
 import {
   getPos, ellipseAttrs, setOvalText, removeOvalText,
-  updateOvalTextPosition, updateAnchoredArrows, preventClick,
+  updateOvalTextPosition, updateAnchoredArrows, updateAnchors, preventClick,
   startMultiDrag
 } from './helpers.js';
 import { selectElement, deselect, showEllipseHandles, updateLegend, showContextMenu, setHideTextInput } from './select.js';
@@ -172,6 +172,7 @@ export function createShape(x, y) {
       ellipse.setAttribute('cy', startCy + dy);
       showEllipseHandles(ellipse);
       updateAnchoredArrows(ellipse);
+      updateAnchors();
       updateOvalTextPosition(ellipse);
     }
 

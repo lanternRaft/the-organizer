@@ -88,6 +88,150 @@ export function getArrowMidpoint(x1, y1, x2, y2, offset) {
   };
 }
 
+// ── Anchor point system ────────────────────────────────────
+
+const ANCHOR_SNAP_RADIUS = 15;
+const ANCHOR_DOT_RADIUS = 4;
+const ANCHOR_CLASS = 'anchor-point';
+const _anchorDots = new Map(); // ellipse -> [{label, el}]
+
+/**
+ * Get the 4 cardinal anchor points for an ellipse.
+ * Positions: top, left, bottom, right (relative to the shape's center).
+ */
+export function getAnchorPoints(cx, cy, rx, ry) {
+  return {
+    top:    { x: cx, y: cy - ry, label: 'top' },
+    left:   { x: cx - rx, y: cy, label: 'left' },
+    bottom: { x: cx, y: cy + ry, label: 'bottom' },
+    right:  { x: cx + rx, y: cy, label: 'right' },
+  };
+}
+
+/**
+ * Find the nearest anchor point within ANCHOR_SNAP_RADIUS of the given position.
+ * Returns { ellipse, anchorPos, anchorLabel } or null.
+ */
+export function findAnchorNear(pos, threshold = ANCHOR_SNAP_RADIUS) {
+  const ellipses = svg.querySelectorAll('ellipse');
+  let best = null;
+  let bestDist = threshold;
+
+  for (const el of ellipses) {
+    const { cx, cy, rx, ry } = ellipseAttrs(el);
+    const anchors = getAnchorPoints(cx, cy, rx, ry);
+    for (const [label, anchorPos] of Object.entries(anchors)) {
+      const dx = pos.x - anchorPos.x;
+      const dy = pos.y - anchorPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = { ellipse: el, anchorPos, anchorLabel: label };
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * Show anchor dots on all shapes at the 4 cardinal positions.
+ */
+export function showAnchors() {
+  const ellipses = svg.querySelectorAll('ellipse');
+  if (ellipses.length === 0) {
+    hideAnchors();
+    return;
+  }
+
+  // If anchors already shown, add dots for new shapes and remove for deleted shapes
+  if (_anchorDots.size > 0) {
+    // Remove dots for shapes that no longer exist
+    for (const [ellipse, dots] of _anchorDots) {
+      if (!ellipse.parentNode) {
+        dots.forEach(d => d.el.remove());
+        _anchorDots.delete(ellipse);
+      }
+    }
+    // Add dots for new shapes
+    for (const el of ellipses) {
+      if (!_anchorDots.has(el)) {
+        const { cx, cy, rx, ry } = ellipseAttrs(el);
+        const anchors = getAnchorPoints(cx, cy, rx, ry);
+        const dots = [];
+        for (const [label, pos] of Object.entries(anchors)) {
+          const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          circle.setAttribute('cx', pos.x);
+          circle.setAttribute('cy', pos.y);
+          circle.setAttribute('r', ANCHOR_DOT_RADIUS);
+          circle.setAttribute('fill', '#ffffff');
+          circle.setAttribute('stroke', '#3b82f6');
+          circle.setAttribute('stroke-width', '2');
+          circle.setAttribute('class', ANCHOR_CLASS);
+          circle.setAttribute('pointer-events', 'none');
+          svg.appendChild(circle);
+          dots.push({ label, el: circle });
+        }
+        _anchorDots.set(el, dots);
+      }
+    }
+    // Update positions of all existing dots
+    updateAnchors();
+    return;
+  }
+
+  // Fresh render
+  for (const el of ellipses) {
+    const { cx, cy, rx, ry } = ellipseAttrs(el);
+    const anchors = getAnchorPoints(cx, cy, rx, ry);
+    const dots = [];
+    for (const [label, pos] of Object.entries(anchors)) {
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', pos.x);
+      circle.setAttribute('cy', pos.y);
+      circle.setAttribute('r', ANCHOR_DOT_RADIUS);
+      circle.setAttribute('fill', '#ffffff');
+      circle.setAttribute('stroke', '#3b82f6');
+      circle.setAttribute('stroke-width', '2');
+      circle.setAttribute('class', ANCHOR_CLASS);
+      circle.setAttribute('pointer-events', 'none');
+      svg.appendChild(circle);
+      dots.push({ label, el: circle });
+    }
+    _anchorDots.set(el, dots);
+  }
+}
+
+/**
+ * Hide all anchor dots.
+ */
+export function hideAnchors() {
+  for (const dots of _anchorDots.values()) {
+    dots.forEach(d => d.el.remove());
+  }
+  _anchorDots.clear();
+}
+
+/**
+ * Update anchor dot positions (call after shapes are moved/resized).
+ */
+export function updateAnchors() {
+  for (const [ellipse, dots] of _anchorDots) {
+    // Skip removed ellipses
+    if (!ellipse.parentNode) {
+      dots.forEach(d => d.el.remove());
+      _anchorDots.delete(ellipse);
+      continue;
+    }
+    const { cx, cy, rx, ry } = ellipseAttrs(ellipse);
+    const anchors = getAnchorPoints(cx, cy, rx, ry);
+    for (const dot of dots) {
+      const pos = anchors[dot.label];
+      dot.el.setAttribute('cx', pos.x);
+      dot.el.setAttribute('cy', pos.y);
+    }
+  }
+}
+
 // ── Arrow path & anchors ─────────────────────────────────
 
 export function updateArrowPath(group) {
@@ -110,24 +254,29 @@ export function setArrowAttrs(group, attrs) {
 
 export function updateAnchoredArrows(ellipse) {
   const { cx, cy, rx, ry } = ellipseAttrs(ellipse);
+  const anchors = getAnchorPoints(cx, cy, rx, ry);
   const arrows = svg.querySelectorAll('g');
   arrows.forEach((group) => {
     if (!group._anchors || group._anchors.length === 0) return;
-    const cur = lineAttrs(group);
 
     const startAnchor = group._anchors.find(a => a.end === 'start');
     const endAnchor = group._anchors.find(a => a.end === 'end');
 
     if (startAnchor && startAnchor.ellipse === ellipse) {
-      const edge = getEllipseEdgePoint(cx, cy, rx, ry, cur.x2, cur.y2);
-      setArrowAttrs(group, { x1: edge.x, y1: edge.y });
+      // Use the stored anchor label; fall back to 'right' for backward compat
+      const label = startAnchor.anchorLabel || 'right';
+      const pos = anchors[label];
+      if (pos) {
+        setArrowAttrs(group, { x1: pos.x, y1: pos.y });
+      }
     }
 
     if (endAnchor && endAnchor.ellipse === ellipse) {
-      // Re-read in case start was just updated
-      const cur2 = lineAttrs(group);
-      const edge = getEllipseEdgePoint(cx, cy, rx, ry, cur2.x1, cur2.y1);
-      setArrowAttrs(group, { x2: edge.x, y2: edge.y });
+      const label = endAnchor.anchorLabel || 'left';
+      const pos = anchors[label];
+      if (pos) {
+        setArrowAttrs(group, { x2: pos.x, y2: pos.y });
+      }
     }
   });
 }
@@ -343,12 +492,13 @@ export function startMultiDrag(e) {
       }
     }
 
-    // Update anchored arrows after all elements are moved
+    // Update anchored arrows and visual anchors after all elements are moved
     for (const snap of snapshots) {
       if (snap.type === 'ellipse') {
         updateAnchoredArrows(snap.el);
       }
     }
+    updateAnchors();
   }
 
   function onUp() {

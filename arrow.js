@@ -11,6 +11,7 @@ import { selectElement, showLineHandles, updateLegend, showContextMenu } from '.
 // Arrow placement state
 let _arrowStart = null;       // { x, y } | null
 let _arrowStartAnchor = null; // oval element | null
+let _arrowStartLabel = null;  // 'top'|'left'|'bottom'|'right' | null
 let _arrowPreviewLine = null; // SVG line element
 let _arrowPreviewDot = null;  // SVG circle element
 
@@ -20,12 +21,18 @@ export function getArrowStart() {
 export function getArrowStartAnchor() {
   return _arrowStartAnchor;
 }
+export function getArrowStartLabel() {
+  return _arrowStartLabel;
+}
 
 export function setArrowStart(pos) {
   _arrowStart = pos;
 }
 export function setArrowStartAnchor(oval) {
   _arrowStartAnchor = oval;
+}
+export function setArrowStartLabel(label) {
+  _arrowStartLabel = label;
 }
 
 // ── Arrow placement (preview) ───────────────────────────
@@ -41,6 +48,7 @@ export function cancelArrowPlacement() {
   }
   _arrowStart = null;
   _arrowStartAnchor = null;
+  _arrowStartLabel = null;
 }
 
 export function updateArrowPreview(pos) {
@@ -74,7 +82,7 @@ export function showArrowStartDot(pos) {
 
 // ── Create arrow (line) ─────────────────────────────────
 
-export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor) {
+export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorLabel, endAnchorLabel) {
   const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   group.style.cursor = 'pointer';
   group._anchors = [];
@@ -84,12 +92,12 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor) {
   group._y2 = y2;
   group._offset = 0;
 
-  // Store anchor references if provided
+  // Store anchor references if provided (with cardinal label)
   if (startAnchor) {
-    group._anchors.push({ end: 'start', ellipse: startAnchor });
+    group._anchors.push({ end: 'start', ellipse: startAnchor, anchorLabel: startAnchorLabel || 'right' });
   }
   if (endAnchor) {
-    group._anchors.push({ end: 'end', ellipse: endAnchor });
+    group._anchors.push({ end: 'end', ellipse: endAnchor, anchorLabel: endAnchorLabel || 'left' });
   }
 
   // Invisible wide path for easy clicking (14px hit target)

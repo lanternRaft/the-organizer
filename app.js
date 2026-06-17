@@ -1,14 +1,14 @@
 // ── Entry point: initialises SVG defs, toolbar, and top-level event listeners ──
 
 import { svg, bgRect, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, setCurrentTool, shapeMode, setShapeMode } from './state.js';
-import { getPos, findOvalAt, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText } from './helpers.js';
+import { getPos, findOvalAt, findAnchorNear, getAnchorPoints, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText, showAnchors, hideAnchors, updateAnchors } from './helpers.js';
 import { deselect, selectElement, updateLegend, hideContextMenu, wasSelBoxDragged } from './select.js';
 import { createShape, showTextInput, hideTextInput } from './shape.js';
 import {
   createArrow, cancelArrowPlacement,
   updateArrowPreview, showArrowStartDot,
-  getArrowStart, getArrowStartAnchor,
-  setArrowStart, setArrowStartAnchor
+  getArrowStart, getArrowStartAnchor, getArrowStartLabel,
+  setArrowStart, setArrowStartAnchor, setArrowStartLabel
 } from './arrow.js';
 
 // ── SVG defs: arrowhead markers ────────────────────
@@ -69,6 +69,7 @@ function switchToSelectTool() {
   document.querySelector('[data-tool="select"]').classList.add('active');
   setCurrentTool('select');
   hideShapeDropdown();
+  hideAnchors();
   INFO.textContent = 'Click an element to select it';
 }
 
@@ -113,12 +114,15 @@ toolBtns.forEach(btn => {
 
     switch (currentTool) {
       case 'select':
+        hideAnchors();
         INFO.textContent = 'Click an element to select it';
         break;
       case 'shape':
+        hideAnchors();
         INFO.textContent = 'Click the canvas to place an oval';
         break;
       case 'arrow':
+        showAnchors();
         INFO.textContent = 'Click to set the arrow start point';
         break;
     }
@@ -187,36 +191,42 @@ svg.addEventListener('click', (e) => {
     case 'arrow': {
       const arrowStart = getArrowStart();
       if (!arrowStart) {
-        // First click: detect if on an oval
-        const ovalAtStart = findOvalAt(pos);
-        setArrowStart(pos);
+        // First click: snap to nearest anchor within 15px
+        const snappedStart = findAnchorNear(pos);
+        const ovalAtStart = snappedStart ? snappedStart.ellipse : null;
+        const startPos = snappedStart ? snappedStart.anchorPos : pos;
+        setArrowStart(startPos);
         setArrowStartAnchor(ovalAtStart || null);
-        showArrowStartDot(pos);
+        setArrowStartLabel(ovalAtStart ? snappedStart.anchorLabel : null);
+        showArrowStartDot(startPos);
         INFO.textContent = 'Click again to place the arrow end point';
       } else {
-        // Second click: detect if on an oval, compute edge points
+        // Second click: snap to nearest anchor within 15px
         const arrowStartAnchor = getArrowStartAnchor();
-        const endAnchor = findOvalAt(pos);
+        const arrowStartLabel = getArrowStartLabel();
+        const snappedEnd = findAnchorNear(pos);
+        const endAnchor = snappedEnd ? snappedEnd.ellipse : null;
+        const endAnchorLabel = snappedEnd ? snappedEnd.anchorLabel : null;
+        const snappedEndPos = snappedEnd ? snappedEnd.anchorPos : pos;
 
-        // Compute actual start position (may be on oval edge)
+        // Compute actual start position (on oval edge at the stored cardinal anchor)
         let sx = arrowStart.x, sy = arrowStart.y;
-        if (arrowStartAnchor) {
+        if (arrowStartAnchor && arrowStartLabel) {
           const { cx, cy, rx, ry } = ellipseAttrs(arrowStartAnchor);
-          // Reference: toward the end click position
-          const ref = endAnchor ? getEllipseEdgePoint(...Object.values(ellipseAttrs(endAnchor)), pos.x, pos.y) : pos;
-          const edge = getEllipseEdgePoint(cx, cy, rx, ry, ref.x, ref.y);
-          sx = edge.x; sy = edge.y;
+          const anchors = getAnchorPoints(cx, cy, rx, ry);
+          sx = anchors[arrowStartLabel].x;
+          sy = anchors[arrowStartLabel].y;
         }
 
-        // Compute actual end position (may be on oval edge)
-        let ex = pos.x, ey = pos.y;
-        if (endAnchor) {
-          const { cx, cy, rx, ry } = ellipseAttrs(endAnchor);
-          const edge = getEllipseEdgePoint(cx, cy, rx, ry, sx, sy);
-          ex = edge.x; ey = edge.y;
+        // Compute actual end position (on oval edge at the cardinal anchor)
+        let ex = snappedEndPos.x, ey = snappedEndPos.y;
+        if (endAnchor && endAnchorLabel) {
+          // Already snapped to the anchor position, just use it
+          ex = snappedEndPos.x;
+          ey = snappedEndPos.y;
         }
 
-        createArrow(sx, sy, ex, ey, arrowStartAnchor, endAnchor);
+        createArrow(sx, sy, ex, ey, arrowStartAnchor, endAnchor, arrowStartLabel, endAnchorLabel);
         cancelArrowPlacement();
         updateLegend();
         switchToSelectTool();
@@ -234,7 +244,10 @@ svg.addEventListener('mousemove', (e) => {
   if (e.target.classList.contains('resize-handle')) return;
 
   const pos = getPos(e);
-  updateArrowPreview(pos);
+  // Snap preview end to nearest anchor within 15px
+  const snapped = findAnchorNear(pos);
+  const previewPos = snapped ? snapped.anchorPos : pos;
+  updateArrowPreview(previewPos);
 });
 
 // ── Clipboard (in-memory) ────────────────────────────────

@@ -8,14 +8,30 @@ import {
 } from './state.js';
 
 import {
-  getPos, findOvalAt, ellipseAttrs, lineAttrs,
+  getPos, findOvalAt, findAnchorNear, ellipseAttrs, lineAttrs,
   getEllipseEdgePoint, getArrowMidpoint,
   setArrowAttrs, updateArrowPath, updateArrowMarker,
   updateOvalTextPosition, updateAnchoredArrows,
+  showAnchors, hideAnchors, updateAnchors,
   preventClick
 } from './helpers.js';
 
 // ── Selection ────────────────────────────────────────────
+
+/**
+ * Update anchor visibility based on current state.
+ * Anchors visible when:
+ * - arrow tool is active, OR
+ * - any arrow is in the selected set
+ */
+function updateAnchorVisibility() {
+  const hasArrowSelected = [...selectedTypes.values()].includes('arrow');
+  if (currentTool === 'arrow' || hasArrowSelected) {
+    showAnchors();
+  } else {
+    hideAnchors();
+  }
+}
 
 export function selectElement(el, type, additive = false) {
   if (additive && el) {
@@ -61,6 +77,7 @@ export function selectElement(el, type, additive = false) {
       if (soleType === 'ellipse') showEllipseHandles(sole);
       else if (soleType === 'arrow') showLineHandles(sole);
     }
+    updateAnchorVisibility();
   } else {
     // Single selection — clear all others first
     deselect();
@@ -81,6 +98,7 @@ export function selectElement(el, type, additive = false) {
       showLineHandles(el);
       INFO.textContent = 'Drag an endpoint handle to change the arrow length; drag the midpoint handle to curve it';
     }
+    updateAnchorVisibility();
   }
 
   // Update info text for multi-selection
@@ -110,6 +128,7 @@ export function deselect() {
   clearSelected();
   removeHandles();
   hideContextMenu();
+  updateAnchorVisibility();
 
   switch (currentTool) {
     case 'select':
@@ -252,6 +271,7 @@ export function showEllipseHandles(el) {
       }
       showEllipseHandles(el);
       updateAnchoredArrows(el);
+      updateAnchors();
       updateOvalTextPosition(el);
     });
   });
@@ -273,15 +293,14 @@ export function showLineHandles(el) {
     setArrowAttrs(el, { x1: pos.x, y1: pos.y });
     showLineHandles(el);
   }, () => {
-    // On drag end: check if endpoint is on an oval → anchor
+    // On drag end: snap to nearest anchor within 15px
     const { x1, y1, x2, y2 } = lineAttrs(el);
-    const oval = findOvalAt({ x: x1, y: y1 });
-    if (oval) {
+    const snapped = findAnchorNear({ x: x1, y: y1 });
+    if (snapped) {
       if (!el._anchors) el._anchors = [];
       el._anchors = el._anchors.filter(a => a.end !== 'start');
-      el._anchors.push({ end: 'start', ellipse: oval });
-      const edge = getEllipseEdgePoint(...Object.values(ellipseAttrs(oval)), x2, y2);
-      setArrowAttrs(el, { x1: edge.x, y1: edge.y });
+      el._anchors.push({ end: 'start', ellipse: snapped.ellipse, anchorLabel: snapped.anchorLabel });
+      setArrowAttrs(el, { x1: snapped.anchorPos.x, y1: snapped.anchorPos.y });
       showLineHandles(el);
     }
   });
@@ -295,15 +314,14 @@ export function showLineHandles(el) {
     setArrowAttrs(el, { x2: pos.x, y2: pos.y });
     showLineHandles(el);
   }, () => {
-    // On drag end: check if endpoint is on an oval → anchor
+    // On drag end: snap to nearest anchor within 15px
     const { x1, y1, x2, y2 } = lineAttrs(el);
-    const oval = findOvalAt({ x: x2, y: y2 });
-    if (oval) {
+    const snapped = findAnchorNear({ x: x2, y: y2 });
+    if (snapped) {
       if (!el._anchors) el._anchors = [];
       el._anchors = el._anchors.filter(a => a.end !== 'end');
-      el._anchors.push({ end: 'end', ellipse: oval });
-      const edge = getEllipseEdgePoint(...Object.values(ellipseAttrs(oval)), x1, y1);
-      setArrowAttrs(el, { x2: edge.x, y2: edge.y });
+      el._anchors.push({ end: 'end', ellipse: snapped.ellipse, anchorLabel: snapped.anchorLabel });
+      setArrowAttrs(el, { x2: snapped.anchorPos.x, y2: snapped.anchorPos.y });
       showLineHandles(el);
     }
   });

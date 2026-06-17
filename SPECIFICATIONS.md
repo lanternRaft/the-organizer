@@ -22,6 +22,14 @@ Menu with a little button to assign meanings to different colors of nodes, label
     - no direction (no head)
     - mono direction (1 head)
     - dual direction (2 heads)
+- Anchors
+  - Can be anchored to middle top, middle left, middle bottom or middle right
+  - Anchors are visible on all shapes
+    - when the arrow tool is selected
+    - when one point of an arrow is set and the user is determining where to set the other one
+    - when an arrow is selected
+  - Arrows automatically attach to any anchor within a 15px radius of an end being placed
+
 
 ## Labels
 - Size and shape are adjustable
