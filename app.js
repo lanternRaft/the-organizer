@@ -118,24 +118,64 @@ function ellipseAttrs(el) {
 }
 
 function lineAttrs(el) {
-  // Arrow elements are <g> groups; get attrs from the visible line inside
-  const line = el.tagName === 'g' ? el._visLine : el;
+  // Arrow elements are <g> groups; get stored coords from the group
+  if (el.tagName === 'g') {
+    return {
+      x1: el._x1,
+      y1: el._y1,
+      x2: el._x2,
+      y2: el._y2,
+    };
+  }
+  // Fallback for plain <line> elements
   return {
-    x1: parseFloat(line.getAttribute('x1')),
-    y1: parseFloat(line.getAttribute('y1')),
-    x2: parseFloat(line.getAttribute('x2')),
-    y2: parseFloat(line.getAttribute('y2')),
+    x1: parseFloat(el.getAttribute('x1')),
+    y1: parseFloat(el.getAttribute('y1')),
+    x2: parseFloat(el.getAttribute('x2')),
+    y2: parseFloat(el.getAttribute('y2')),
   };
 }
 
 function setArrowAttrs(group, attrs) {
-  // Update both the visible line and the hit line in the group
-  const hit = group._hitLine;
-  const vis = group._visLine;
-  if (attrs.x1 !== undefined) { hit.setAttribute('x1', attrs.x1); vis.setAttribute('x1', attrs.x1); }
-  if (attrs.y1 !== undefined) { hit.setAttribute('y1', attrs.y1); vis.setAttribute('y1', attrs.y1); }
-  if (attrs.x2 !== undefined) { hit.setAttribute('x2', attrs.x2); vis.setAttribute('x2', attrs.x2); }
-  if (attrs.y2 !== undefined) { hit.setAttribute('y2', attrs.y2); vis.setAttribute('y2', attrs.y2); }
+  // Update the stored coordinates and regenerate the path
+  if (attrs.x1 !== undefined) group._x1 = attrs.x1;
+  if (attrs.y1 !== undefined) group._y1 = attrs.y1;
+  if (attrs.x2 !== undefined) group._x2 = attrs.x2;
+  if (attrs.y2 !== undefined) group._y2 = attrs.y2;
+  updateArrowPath(group);
+}
+
+// ── Curve helpers ────────────────────────────────────────
+
+function getControlPoint(x1, y1, x2, y2, offset) {
+  const mx = (x1 + x2) / 2;
+  const my = (y1 + y2) / 2;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 1) return { x: mx, y: my };
+  // Perpendicular unit vector
+  const nx = -dy / len;
+  const ny = dx / len;
+  return { x: mx + nx * offset, y: my + ny * offset };
+}
+
+function getArrowMidpoint(x1, y1, x2, y2, offset) {
+  // Quadratic bezier at t=0.5: B(0.5) = 0.25*P0 + 0.5*P1 + 0.25*P2
+  const cp = getControlPoint(x1, y1, x2, y2, offset);
+  return {
+    x: 0.25 * x1 + 0.5 * cp.x + 0.25 * x2,
+    y: 0.25 * y1 + 0.5 * cp.y + 0.25 * y2,
+  };
+}
+
+function updateArrowPath(group) {
+  const { _x1: x1, _y1: y1, _x2: x2, _y2: y2 } = group;
+  const offset = group._offset || 0;
+  const cp = getControlPoint(x1, y1, x2, y2, offset);
+  const d = 'M ' + x1 + ' ' + y1 + ' Q ' + cp.x + ' ' + cp.y + ' ' + x2 + ' ' + y2;
+  group._hitPath.setAttribute('d', d);
+  group._visPath.setAttribute('d', d);
 }
 
 // ── Selection ────────────────────────────────────────────
@@ -152,10 +192,10 @@ function selectElement(el, type) {
     showEllipseHandles(el);
     INFO.textContent = 'Drag a corner handle to resize, or drag the oval to move it';
   } else if (type === 'arrow') {
-    el._visLine.setAttribute('stroke', '#fbbf24');
-    el._visLine.setAttribute('stroke-width', '3');
+    el._visPath.setAttribute('stroke', '#fbbf24');
+    el._visPath.setAttribute('stroke-width', '3');
     showLineHandles(el);
-    INFO.textContent = 'Drag an endpoint handle to change the arrow length';
+    INFO.textContent = 'Drag an endpoint handle to change the arrow length; drag the midpoint handle to curve it';
   }
 }
 
@@ -165,9 +205,9 @@ function deselect() {
       selected.setAttribute('stroke', '#60a5fa');
       selected.setAttribute('stroke-width', '2');
     } else if (selectedType === 'arrow') {
-      const orig = selected._visLine.getAttribute('data-original-color') || '#3b82f6';
-      selected._visLine.setAttribute('stroke', orig);
-      selected._visLine.setAttribute('stroke-width', '2');
+      const orig = selected._visPath.getAttribute('data-original-color') || '#3b82f6';
+      selected._visPath.setAttribute('stroke', orig);
+      selected._visPath.setAttribute('stroke-width', '2');
     }
     selected = null;
     selectedType = null;
@@ -209,7 +249,7 @@ ctxMenu.addEventListener('click', (e) => {
     if (selectedType === 'ellipse') {
       selected.setAttribute('fill', color);
     } else if (selectedType === 'arrow') {
-      const vis = selected._visLine;
+      const vis = selected._visPath;
       vis.setAttribute('stroke', color);
       vis.setAttribute('data-original-color', color);
       // Update the marker color
@@ -382,11 +422,12 @@ function showEllipseHandles(el) {
   });
 }
 
-// ── Line handles (2 endpoints) ───────────────────────────
+// ── Line handles (2 endpoints + midpoint circle) ─────────
 
 function showLineHandles(el) {
   removeHandles();
   const { x1, y1, x2, y2 } = lineAttrs(el);
+  const offset = el._offset || 0;
 
   // Handle at start point
   createHandle(x1, y1, 'grab', (pos) => {
@@ -394,12 +435,7 @@ function showLineHandles(el) {
     if (el._anchors) {
       el._anchors = el._anchors.filter(a => a.end !== 'start');
     }
-    if (el.tagName === 'g') {
-      setArrowAttrs(el, { x1: pos.x, y1: pos.y });
-    } else {
-      el.setAttribute('x1', pos.x);
-      el.setAttribute('y1', pos.y);
-    }
+    setArrowAttrs(el, { x1: pos.x, y1: pos.y });
     showLineHandles(el);
   }, () => {
     // On drag end: check if endpoint is on an oval → anchor
@@ -421,12 +457,7 @@ function showLineHandles(el) {
     if (el._anchors) {
       el._anchors = el._anchors.filter(a => a.end !== 'end');
     }
-    if (el.tagName === 'g') {
-      setArrowAttrs(el, { x2: pos.x, y2: pos.y });
-    } else {
-      el.setAttribute('x2', pos.x);
-      el.setAttribute('y2', pos.y);
-    }
+    setArrowAttrs(el, { x2: pos.x, y2: pos.y });
     showLineHandles(el);
   }, () => {
     // On drag end: check if endpoint is on an oval → anchor
@@ -440,6 +471,49 @@ function showLineHandles(el) {
       setArrowAttrs(el, { x2: edge.x, y2: edge.y });
       showLineHandles(el);
     }
+  });
+
+  // ── Midpoint circle handle for curving ──
+  const mid = getArrowMidpoint(x1, y1, x2, y2, offset);
+  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  circle.setAttribute('cx', mid.x);
+  circle.setAttribute('cy', mid.y);
+  circle.setAttribute('r', HANDLE_SIZE / 2);
+  circle.setAttribute('fill', '#ffffff');
+  circle.setAttribute('stroke', '#3b82f6');
+  circle.setAttribute('stroke-width', '2');
+  circle.setAttribute('cursor', 'grab');
+  circle.classList.add('resize-handle');
+  svg.appendChild(circle);
+
+  const data = { el: circle };
+  handles.push(data);
+
+  circle.addEventListener('mousedown', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!selected) return;
+
+    function onMove(me) {
+      const pos = getPos(me);
+      // Calculate signed perpendicular distance from the baseline (x1,y1)-(x2,y2)
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len < 1) return;
+      const cross = dx * (pos.y - y1) - dy * (pos.x - x1);
+      el._offset = cross / len;
+      updateArrowPath(el);
+      showLineHandles(el);
+    }
+
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   });
 }
 
@@ -517,6 +591,11 @@ function createArrow(x1, y1, x2, y2, startAnchor, endAnchor) {
   const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   group.style.cursor = 'pointer';
   group._anchors = [];
+  group._x1 = x1;
+  group._y1 = y1;
+  group._x2 = x2;
+  group._y2 = y2;
+  group._offset = 0;
 
   // Store anchor references if provided
   if (startAnchor) {
@@ -526,33 +605,30 @@ function createArrow(x1, y1, x2, y2, startAnchor, endAnchor) {
     group._anchors.push({ end: 'end', ellipse: endAnchor });
   }
 
-  // Invisible wide line for easy clicking (14px hit target)
-  const hitLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  hitLine.setAttribute('x1', x1);
-  hitLine.setAttribute('y1', y1);
-  hitLine.setAttribute('x2', x2);
-  hitLine.setAttribute('y2', y2);
-  hitLine.setAttribute('stroke', 'transparent');
-  hitLine.setAttribute('stroke-width', '14');
-  hitLine.setAttribute('stroke-linecap', 'round');
-  group.appendChild(hitLine);
+  // Invisible wide path for easy clicking (14px hit target)
+  const hitPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  hitPath.setAttribute('stroke', 'transparent');
+  hitPath.setAttribute('stroke-width', '14');
+  hitPath.setAttribute('fill', 'none');
+  hitPath.setAttribute('stroke-linecap', 'round');
+  group.appendChild(hitPath);
 
-  // Visible arrow line (no pointer-events, all events go through the group)
-  const visLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  visLine.setAttribute('x1', x1);
-  visLine.setAttribute('y1', y1);
-  visLine.setAttribute('x2', x2);
-  visLine.setAttribute('y2', y2);
-  visLine.setAttribute('stroke', '#3b82f6');
-  visLine.setAttribute('stroke-width', '2');
-  visLine.setAttribute('stroke-linecap', 'round');
-  visLine.setAttribute('data-original-color', '#3b82f6');
-  visLine.setAttribute('marker-end', 'url(#arrowhead)');
-  group.appendChild(visLine);
+  // Visible arrow path (no pointer-events, all events go through the group)
+  const visPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  visPath.setAttribute('stroke', '#3b82f6');
+  visPath.setAttribute('stroke-width', '2');
+  visPath.setAttribute('fill', 'none');
+  visPath.setAttribute('stroke-linecap', 'round');
+  visPath.setAttribute('data-original-color', '#3b82f6');
+  visPath.setAttribute('marker-end', 'url(#arrowhead)');
+  group.appendChild(visPath);
 
   // Store references for later attribute access
-  group._hitLine = hitLine;
-  group._visLine = visLine;
+  group._hitPath = hitPath;
+  group._visPath = visPath;
+
+  // Set initial path geometry
+  updateArrowPath(group);
 
   // Click on arrow → select it
   group.addEventListener('click', (e) => {
@@ -744,6 +820,7 @@ const legendColors = new Map(); // color -> { customName: string | null, type: '
 function updateLegend() {
   const ellipses = svg.querySelectorAll('ellipse');
   const lines = svg.querySelectorAll('line');
+  const paths = svg.querySelectorAll('path');
   const colorsInUse = new Map(); // color -> type
 
   ellipses.forEach((el) => {
@@ -755,6 +832,15 @@ function updateLegend() {
     const stroke = el.getAttribute('stroke');
     if (stroke && stroke !== 'transparent' && !stroke.startsWith('rgba') && stroke !== '#fbbf24') {
       // Only add if not already tracked as a fill color
+      if (!colorsInUse.has(stroke)) {
+        colorsInUse.set(stroke, 'stroke');
+      }
+    }
+  });
+
+  paths.forEach((el) => {
+    const stroke = el.getAttribute('stroke');
+    if (stroke && stroke !== 'transparent' && !stroke.startsWith('rgba') && stroke !== '#fbbf24' && !stroke.startsWith('none')) {
       if (!colorsInUse.has(stroke)) {
         colorsInUse.set(stroke, 'stroke');
       }
