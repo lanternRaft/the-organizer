@@ -1,1 +1,1 @@
-An HTML, JavaScript and CSS based canvas system for world building
+An HTML, JavaScript and CSS based SVG system for world building via notes and flow
