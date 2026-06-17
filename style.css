@@ -162,70 +162,84 @@ svg {
   background: rgba(255,255,255,0.08);
 }
 
-/* ── Context menu ───────────────────────────────── */
-#ctx-menu {
+/* ── Selection menu ─────────────────────────────── */
+#selection-menu {
   display: none;
   position: fixed;
+  align-items: center;
+  gap: 2px;
   background: #1e293b;
   border: 1px solid #334155;
-  border-radius: 8px;
-  padding: 6px 0;
-  min-width: 130px;
+  border-radius: 10px;
+  padding: 4px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.5);
   z-index: 1000;
   font-family: sans-serif;
   user-select: none;
 }
-#ctx-menu .ctx-title {
-  padding: 6px 14px;
+#selection-menu .sel-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+#selection-menu .sel-btn:hover {
+  background: #334155;
+  color: #e2e8f0;
+}
+#selection-menu .sel-delete:hover {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+}
+
+/* ── Color palette popup ────────────────────────── */
+#color-palette-popup {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 8px;
+  min-width: 140px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  z-index: 1001;
+}
+#color-palette-popup.show {
+  display: block;
+}
+#color-palette-popup .palette-title {
   font-size: 11px;
   color: #94a3b8;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  margin-bottom: 8px;
   cursor: default;
+  text-align: center;
 }
-#ctx-menu .ctx-color {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  font-size: 13px;
-  color: #e2e8f0;
+#color-palette-popup .palette-colors {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+#color-palette-popup .palette-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 2px solid transparent;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: transform 0.12s, border-color 0.12s;
 }
-#ctx-menu .ctx-color:hover {
-  background: #334155;
-}
-#ctx-menu .ctx-swatch {
-  display: inline-block;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 1px solid rgba(255,255,255,0.2);
-  flex-shrink: 0;
-}
-
-#ctx-menu .ctx-divider {
-  height: 1px;
-  background: #334155;
-  margin: 4px 0;
-}
-
-#ctx-menu .ctx-action {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  font-size: 13px;
-  color: #f87171;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-#ctx-menu .ctx-action:hover {
-  background: rgba(248, 113, 113, 0.12);
-}
-#ctx-menu .ctx-delete-icon {
-  font-size: 14px;
-  flex-shrink: 0;
+#color-palette-popup .palette-swatch:hover {
+  transform: scale(1.15);
+  border-color: #fbbf24;
 }

@@ -1,13 +1,13 @@
 // ── Shape creation & text editing ─────────────────────────
 // Supports two modes: 'oval' (default) and 'circle'
 
-import { svg, selected, selectedType, currentTool, selectedSet, selectedTypes, shapeMode, INFO, ctxMenu } from './state.js';
+import { svg, selected, selectedType, currentTool, selectedSet, selectedTypes, shapeMode, INFO } from './state.js';
 import {
   getPos, ellipseAttrs, setOvalText, removeOvalText,
   updateOvalTextPosition, updateAnchoredArrows, updateAnchors,
   startMultiDrag, markDragHappened
 } from './helpers.js';
-import { selectElement, deselect, showEllipseHandles, updateLegend, showContextMenu, setHideTextInput } from './select.js';
+import { selectElement, deselect, showEllipseHandles, updateLegend, setHideTextInput } from './select.js';
 
 // Register our hideTextInput with select module
 let textInput = null;
@@ -203,14 +203,8 @@ export function createShape(x, y) {
     document.addEventListener('mouseup', onUp);
   });
 
-  // Right-click on shape → show context menu
-  ellipse.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (textInput) hideTextInput();
-    selectElement(ellipse, 'ellipse');
-    showContextMenu(e.clientX, e.clientY);
-  });
+  // Note: right-click on a shape is intentionally not handled.
+  // The selection-based floating menu appears when the element is selected.
 
   svg.appendChild(ellipse);
   return ellipse;

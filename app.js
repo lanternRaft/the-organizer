@@ -1,6 +1,6 @@
 // ── Entry point: initialises SVG defs, toolbar, and top-level event listeners ──
 
-import { svg, bgRect, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, setCurrentTool, shapeMode, setShapeMode } from './state.js';
+import { svg, bgRect, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, selMenu, colorPalette, setCurrentTool, shapeMode, setShapeMode } from './state.js';
 import { getPos, findOvalAt, findAnchorNear, getAnchorPoints, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText, showAnchors, hideAnchors, updateAnchors, wasMultiDragged, wasDragHappened } from './helpers.js';
 import { deselect, selectElement, updateLegend, hideContextMenu, wasSelBoxDragged } from './select.js';
 import { createShape, showTextInput, hideTextInput } from './shape.js';
@@ -412,16 +412,13 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
-// ── Context menu: hide on any outside click ────────────
+// ── Selection menu: close on outside click & contextmenu ──
 
 document.addEventListener('click', (e) => {
-  const ctxMenu = document.getElementById('ctx-menu');
-  if (ctxMenu && ctxMenu.contains(e.target)) return;
+  if (selMenu && selMenu.contains(e.target)) return;
   hideContextMenu();
 });
 
 document.addEventListener('contextmenu', (e) => {
-  const ctxMenu = document.getElementById('ctx-menu');
-  if (ctxMenu && ctxMenu.contains(e.target)) return;
   hideContextMenu();
 });

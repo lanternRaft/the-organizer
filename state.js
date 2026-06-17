@@ -3,7 +3,8 @@
 export const svg = document.getElementById('canvas');
 export const bgRect = svg.querySelector('rect');
 export const INFO = document.querySelector('#info');
-export const ctxMenu = document.getElementById('ctx-menu');
+export const selMenu = document.getElementById('selection-menu');
+export const colorPalette = document.getElementById('color-palette-popup');
 export const legendEl = document.getElementById('legend');
 
 export let currentTool = 'select'; // 'select', 'shape', or 'arrow'

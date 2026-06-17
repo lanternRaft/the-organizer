@@ -6,7 +6,7 @@ import {
   getEllipseEdgePoint, updateArrowPath, setArrowAttrs,
   startMultiDrag
 } from './helpers.js';
-import { selectElement, showLineHandles, updateLegend, showContextMenu } from './select.js';
+import { selectElement, showLineHandles, updateLegend } from './select.js';
 
 // Arrow placement state
 let _arrowStart = null;       // { x, y } | null
@@ -192,13 +192,8 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
     document.addEventListener('mouseup', onUp);
   });
 
-  // Right-click on arrow → show context menu
-  group.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    selectElement(group, 'arrow');
-    showContextMenu(e.clientX, e.clientY);
-  });
+  // Note: right-click on an arrow is intentionally not handled.
+  // The selection-based floating menu appears when the element is selected.
 
   svg.appendChild(group);
   return group;

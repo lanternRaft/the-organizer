@@ -3,7 +3,7 @@
 import {
   svg, bgRect, HANDLE_SIZE, handles, selected, selectedType,
   selectedSet, selectedTypes,
-  INFO, ctxMenu, legendEl, legendColors, currentTool, shapeMode,
+  INFO, selMenu, colorPalette, legendEl, legendColors, currentTool, shapeMode,
   setSelected, clearSelected
 } from './state.js';
 
@@ -100,6 +100,13 @@ export function selectElement(el, type, additive = false) {
     updateAnchorVisibility();
   }
 
+  // Show or hide the selection menu
+  if (selectedSet.size === 1) {
+    showSelectionMenu(selected);
+  } else {
+    hideSelectionMenu();
+  }
+
   // Update info text for multi-selection
   if (selectedSet.size > 1) {
     INFO.textContent = `${selectedSet.size} elements selected`;
@@ -126,7 +133,7 @@ export function deselect() {
   selectedTypes.clear();
   clearSelected();
   removeHandles();
-  hideContextMenu();
+  hideSelectionMenu();
   updateAnchorVisibility();
 
   switch (currentTool) {
@@ -144,59 +151,136 @@ export function deselect() {
   }
 }
 
-// ── Context menu ────────────────────────────────────────
+// ── Selection-based floating menu ──────────────────────
 
-export function showContextMenu(x, y) {
-  ctxMenu.style.display = 'block';
-  ctxMenu.style.left = x + 'px';
-  ctxMenu.style.top = y + 'px';
-}
+let _colorPaletteVisible = false;
 
-export function hideContextMenu() {
-  ctxMenu.style.display = 'none';
-}
-
-// Click a color or action in the context menu
-ctxMenu.addEventListener('click', (e) => {
-  const item = e.target.closest('.ctx-color, .ctx-action');
-  if (!item) return;
-  if (selectedSet.size === 0) return;
-
-  if (item.classList.contains('ctx-color')) {
-    const color = item.getAttribute('data-color');
-    const affected = [...selectedSet];
-    for (const el of affected) {
-      const elType = selectedTypes.get(el);
-      if (elType === 'ellipse') {
-        el.setAttribute('fill', color);
-      } else if (elType === 'arrow') {
-        const vis = el._visPath;
-        vis.setAttribute('stroke', color);
-        vis.setAttribute('data-original-color', color);
-        updateArrowMarker(vis, color);
-      }
-    }
-    hideContextMenu();
-    updateLegend();
-  } else if (item.classList.contains('ctx-delete')) {
-    const affected = [...selectedSet];
-    deselect();
-    for (const el of affected) {
-      const elType = selectedTypes.get(el);
-      if (elType === 'ellipse') {
-        removeOvalText(el);
-        const arrows = svg.querySelectorAll('g');
-        arrows.forEach((group) => {
-          if (group._anchors) {
-            group._anchors = group._anchors.filter(a => a.ellipse !== el);
-          }
-        });
-      }
-      el.remove();
-    }
-    updateLegend();
+function getElementScreenRect(el) {
+  if (el.tagName === 'ellipse') {
+    return el.getBoundingClientRect();
   }
+  // Arrow group: compute from the stored endpoints
+  if (el._visPath) {
+    const { x1, y1, x2, y2 } = lineAttrs(el);
+    const pt1 = svg.createSVGPoint();
+    pt1.x = x1; pt1.y = y1;
+    const pt2 = svg.createSVGPoint();
+    pt2.x = x2; pt2.y = y2;
+    const ctm = svg.getScreenCTM();
+    const sp1 = pt1.matrixTransform(ctm);
+    const sp2 = pt2.matrixTransform(ctm);
+    const minX = Math.min(sp1.x, sp2.x);
+    const minY = Math.min(sp1.y, sp2.y);
+    const maxX = Math.max(sp1.x, sp2.x);
+    const maxY = Math.max(sp1.y, sp2.y);
+    return {
+      left: minX,
+      top: minY,
+      width: maxX - minX,
+      height: maxY - minY,
+      bottom: maxY,
+    };
+  }
+  return el.getBoundingClientRect();
+}
+
+function showSelectionMenu(el) {
+  if (!selMenu) return;
+
+  const rect = getElementScreenRect(el);
+  if (!rect || rect.width === 0) return;
+
+  // Show and measure the menu so we can compute centered position
+  selMenu.style.display = 'flex';
+  selMenu.style.visibility = 'hidden';
+  const menuWidth = selMenu.offsetWidth;
+  selMenu.style.visibility = 'visible';
+
+  const x = rect.left + rect.width / 2 - menuWidth / 2;
+  const y = rect.bottom + 8;
+
+  selMenu.style.left = Math.max(4, x) + 'px';
+  selMenu.style.top = y + 'px';
+
+  hideColorPalette();
+}
+
+function hideSelectionMenu() {
+  if (!selMenu) return;
+  selMenu.style.display = 'none';
+  hideColorPalette();
+}
+
+function hideColorPalette() {
+  if (!colorPalette) return;
+  colorPalette.classList.remove('show');
+  _colorPaletteVisible = false;
+}
+
+function toggleColorPalette(e) {
+  e.stopPropagation();
+  if (!colorPalette) return;
+  _colorPaletteVisible = !_colorPaletteVisible;
+  colorPalette.classList.toggle('show', _colorPaletteVisible);
+}
+
+function applyColor(color) {
+  if (selectedSet.size === 0) return;
+  const affected = [...selectedSet];
+  for (const el of affected) {
+    const elType = selectedTypes.get(el);
+    if (elType === 'ellipse') {
+      el.setAttribute('fill', color);
+    } else if (elType === 'arrow') {
+      const vis = el._visPath;
+      vis.setAttribute('stroke', color);
+      vis.setAttribute('data-original-color', color);
+      updateArrowMarker(vis, color);
+    }
+  }
+  hideColorPalette();
+  updateLegend();
+}
+
+function deleteSelected() {
+  if (selectedSet.size === 0) return;
+  const affected = [...selectedSet];
+  deselect();
+  for (const el of affected) {
+    const elType = selectedTypes.get(el);
+    if (elType === 'ellipse') {
+      removeOvalText(el);
+      const arrows = svg.querySelectorAll('g');
+      arrows.forEach((group) => {
+        if (group._anchors) {
+          group._anchors = group._anchors.filter(a => a.ellipse !== el);
+        }
+      });
+    }
+    el.remove();
+  }
+  updateLegend();
+}
+
+// ── Selection menu event listeners ──────────────────────
+
+selMenu?.querySelector('.sel-delete')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  deleteSelected();
 });
+
+selMenu?.querySelector('.sel-palette')?.addEventListener('click', toggleColorPalette);
+
+// Color swatch clicks in palette
+colorPalette?.addEventListener('click', (e) => {
+  const swatch = e.target.closest('.palette-swatch');
+  if (!swatch) return;
+  const color = swatch.getAttribute('data-color');
+  applyColor(color);
+});
+
+// Click outside the color palette to close it
+// (handled at document level in app.js)
 
 // ── Handles ──────────────────────────────────────────────
 
@@ -448,6 +532,14 @@ let hideTextInput = () => {};
 
 export function setHideTextInput(fn) {
   hideTextInput = fn;
+}
+
+// Keep old exports for backwards compat
+export function showContextMenu(x, y) {
+  // No-op now
+}
+export function hideContextMenu() {
+  hideSelectionMenu();
 }
 
 // ── Selection box (marquee select) ─────────────────────
