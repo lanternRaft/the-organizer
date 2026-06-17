@@ -1,22 +1,8 @@
 const svg = document.getElementById('canvas');
 const bgRect = svg.querySelector('rect');
 
-// ── SVG defs: arrowhead marker ─────────────────────────
+// ── SVG defs: arrowhead markers ────────────────────
 const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-
-// Toolbar arrowhead (light)
-const markerTool = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-markerTool.setAttribute('id', 'tool-arrowhead');
-markerTool.setAttribute('markerWidth', '10');
-markerTool.setAttribute('markerHeight', '7');
-markerTool.setAttribute('refX', '10');
-markerTool.setAttribute('refY', '3.5');
-markerTool.setAttribute('orient', 'auto');
-const polyTool = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-polyTool.setAttribute('points', '0 0, 10 3.5, 0 7');
-polyTool.setAttribute('fill', 'currentColor');
-markerTool.appendChild(polyTool);
-defs.appendChild(markerTool);
 
 // Arrowhead marker for placed arrows (blue default)
 const markerArrow = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
@@ -49,7 +35,7 @@ defs.appendChild(markerPrev);
 svg.insertBefore(defs, svg.firstChild);
 
 // ── State ──────────────────────────────────────────────
-let currentTool = 'oval'; // 'oval' or 'arrow'
+let currentTool = 'select'; // 'select', 'oval', or 'arrow'
 let selected = null;      // SVG element (ellipse or line)
 let selectedType = null;  // 'ellipse' or 'arrow'
 const handles = [];
@@ -77,10 +63,16 @@ toolBtns.forEach(btn => {
 
     deselect();
 
-    if (currentTool === 'oval') {
-      INFO.textContent = 'Click the canvas to place an oval';
-    } else {
-      INFO.textContent = 'Click to set the arrow start point';
+    switch (currentTool) {
+      case 'select':
+        INFO.textContent = 'Click an element to select it';
+        break;
+      case 'oval':
+        INFO.textContent = 'Click the canvas to place an oval';
+        break;
+      case 'arrow':
+        INFO.textContent = 'Click to set the arrow start point';
+        break;
     }
   });
 });
@@ -102,12 +94,24 @@ function ellipseAttrs(el) {
 }
 
 function lineAttrs(el) {
+  // Arrow elements are <g> groups; get attrs from the visible line inside
+  const line = el.tagName === 'g' ? el._visLine : el;
   return {
-    x1: parseFloat(el.getAttribute('x1')),
-    y1: parseFloat(el.getAttribute('y1')),
-    x2: parseFloat(el.getAttribute('x2')),
-    y2: parseFloat(el.getAttribute('y2')),
+    x1: parseFloat(line.getAttribute('x1')),
+    y1: parseFloat(line.getAttribute('y1')),
+    x2: parseFloat(line.getAttribute('x2')),
+    y2: parseFloat(line.getAttribute('y2')),
   };
+}
+
+function setArrowAttrs(group, attrs) {
+  // Update both the visible line and the hit line in the group
+  const hit = group._hitLine;
+  const vis = group._visLine;
+  if (attrs.x1 !== undefined) { hit.setAttribute('x1', attrs.x1); vis.setAttribute('x1', attrs.x1); }
+  if (attrs.y1 !== undefined) { hit.setAttribute('y1', attrs.y1); vis.setAttribute('y1', attrs.y1); }
+  if (attrs.x2 !== undefined) { hit.setAttribute('x2', attrs.x2); vis.setAttribute('x2', attrs.x2); }
+  if (attrs.y2 !== undefined) { hit.setAttribute('y2', attrs.y2); vis.setAttribute('y2', attrs.y2); }
 }
 
 // ── Selection ────────────────────────────────────────────
@@ -124,8 +128,8 @@ function selectElement(el, type) {
     showEllipseHandles(el);
     INFO.textContent = 'Drag a corner handle to resize, or drag the oval to move it';
   } else if (type === 'arrow') {
-    el.setAttribute('stroke', '#fbbf24');
-    el.setAttribute('stroke-width', '3');
+    el._visLine.setAttribute('stroke', '#fbbf24');
+    el._visLine.setAttribute('stroke-width', '3');
     showLineHandles(el);
     INFO.textContent = 'Drag an endpoint handle to change the arrow length';
   }
@@ -137,18 +141,25 @@ function deselect() {
       selected.setAttribute('stroke', '#60a5fa');
       selected.setAttribute('stroke-width', '2');
     } else if (selectedType === 'arrow') {
-      selected.setAttribute('stroke', selected.getAttribute('data-original-color') || '#3b82f6');
-      selected.setAttribute('stroke-width', '2');
+      const orig = selected._visLine.getAttribute('data-original-color') || '#3b82f6';
+      selected._visLine.setAttribute('stroke', orig);
+      selected._visLine.setAttribute('stroke-width', '2');
     }
     selected = null;
     selectedType = null;
   }
   removeHandles();
   hideContextMenu();
-  if (currentTool === 'oval') {
-    INFO.textContent = 'Click the canvas to place an oval';
-  } else {
-    INFO.textContent = 'Click to set the arrow start point';
+  switch (currentTool) {
+    case 'select':
+      INFO.textContent = 'Click an element to select it';
+      break;
+    case 'oval':
+      INFO.textContent = 'Click the canvas to place an oval';
+      break;
+    case 'arrow':
+      INFO.textContent = 'Click to set the arrow start point';
+      break;
   }
 }
 
@@ -174,10 +185,11 @@ ctxMenu.addEventListener('click', (e) => {
     if (selectedType === 'ellipse') {
       selected.setAttribute('fill', color);
     } else if (selectedType === 'arrow') {
-      selected.setAttribute('stroke', color);
-      selected.setAttribute('data-original-color', color);
+      const vis = selected._visLine;
+      vis.setAttribute('stroke', color);
+      vis.setAttribute('data-original-color', color);
       // Update the marker color
-      updateArrowMarker(selected, color);
+      updateArrowMarker(vis, color);
     }
     hideContextMenu();
     updateLegend();
@@ -309,15 +321,23 @@ function showLineHandles(el) {
 
   // Handle at start point
   createHandle(x1, y1, 'grab', (pos) => {
-    el.setAttribute('x1', pos.x);
-    el.setAttribute('y1', pos.y);
+    if (el.tagName === 'g') {
+      setArrowAttrs(el, { x1: pos.x, y1: pos.y });
+    } else {
+      el.setAttribute('x1', pos.x);
+      el.setAttribute('y1', pos.y);
+    }
     showLineHandles(el);
   });
 
   // Handle at end point
   createHandle(x2, y2, 'grab', (pos) => {
-    el.setAttribute('x2', pos.x);
-    el.setAttribute('y2', pos.y);
+    if (el.tagName === 'g') {
+      setArrowAttrs(el, { x2: pos.x, y2: pos.y });
+    } else {
+      el.setAttribute('x2', pos.x);
+      el.setAttribute('y2', pos.y);
+    }
     showLineHandles(el);
   });
 }
@@ -390,32 +410,51 @@ function createOval(x, y) {
 // ── Create arrow (line) ─────────────────────────────────
 
 function createArrow(x1, y1, x2, y2) {
-  const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-  line.setAttribute('x1', x1);
-  line.setAttribute('y1', y1);
-  line.setAttribute('x2', x2);
-  line.setAttribute('y2', y2);
-  line.setAttribute('stroke', '#3b82f6');
-  line.setAttribute('stroke-width', '2');
-  line.setAttribute('stroke-linecap', 'round');
-  line.setAttribute('data-original-color', '#3b82f6');
-  line.setAttribute('marker-end', 'url(#arrowhead)');
-  line.style.cursor = 'pointer';
+  const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  group.style.cursor = 'pointer';
+
+  // Invisible wide line for easy clicking (14px hit target)
+  const hitLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  hitLine.setAttribute('x1', x1);
+  hitLine.setAttribute('y1', y1);
+  hitLine.setAttribute('x2', x2);
+  hitLine.setAttribute('y2', y2);
+  hitLine.setAttribute('stroke', 'transparent');
+  hitLine.setAttribute('stroke-width', '14');
+  hitLine.setAttribute('stroke-linecap', 'round');
+  group.appendChild(hitLine);
+
+  // Visible arrow line (no pointer-events, all events go through the group)
+  const visLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  visLine.setAttribute('x1', x1);
+  visLine.setAttribute('y1', y1);
+  visLine.setAttribute('x2', x2);
+  visLine.setAttribute('y2', y2);
+  visLine.setAttribute('stroke', '#3b82f6');
+  visLine.setAttribute('stroke-width', '2');
+  visLine.setAttribute('stroke-linecap', 'round');
+  visLine.setAttribute('data-original-color', '#3b82f6');
+  visLine.setAttribute('marker-end', 'url(#arrowhead)');
+  group.appendChild(visLine);
+
+  // Store references for later attribute access
+  group._hitLine = hitLine;
+  group._visLine = visLine;
 
   // Click on arrow → select it
-  line.addEventListener('click', (e) => {
+  group.addEventListener('click', (e) => {
     e.stopPropagation();
-    selectElement(line, 'arrow');
+    selectElement(group, 'arrow');
   });
 
   // Mousedown on a selected arrow → drag to move it
-  line.addEventListener('mousedown', (e) => {
-    if (selected !== line || selectedType !== 'arrow') return;
+  group.addEventListener('mousedown', (e) => {
+    if (selected !== group || selectedType !== 'arrow') return;
     e.stopPropagation();
     e.preventDefault();
 
     const startPos = getPos(e);
-    const { x1, y1, x2, y2 } = lineAttrs(line);
+    const { x1, y1, x2, y2 } = lineAttrs(group);
     let dragged = false;
 
     function onMove(me) {
@@ -423,18 +462,18 @@ function createArrow(x1, y1, x2, y2) {
       const pos = getPos(me);
       const dx = pos.x - startPos.x;
       const dy = pos.y - startPos.y;
-      line.setAttribute('x1', x1 + dx);
-      line.setAttribute('y1', y1 + dy);
-      line.setAttribute('x2', x2 + dx);
-      line.setAttribute('y2', y2 + dy);
-      showLineHandles(line);
+      setArrowAttrs(group, {
+        x1: x1 + dx, y1: y1 + dy,
+        x2: x2 + dx, y2: y2 + dy,
+      });
+      showLineHandles(group);
     }
 
     function onUp() {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
       if (dragged) {
-        line.addEventListener('click', preventClick, { once: true });
+        group.addEventListener('click', preventClick, { once: true });
       }
     }
 
@@ -443,15 +482,15 @@ function createArrow(x1, y1, x2, y2) {
   });
 
   // Right-click on arrow → show context menu
-  line.addEventListener('contextmenu', (e) => {
+  group.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    selectElement(line, 'arrow');
+    selectElement(group, 'arrow');
     showContextMenu(e.clientX, e.clientY);
   });
 
-  svg.appendChild(line);
-  return line;
+  svg.appendChild(group);
+  return group;
 }
 
 // ── Arrow placement (preview) ───────────────────────────
@@ -511,23 +550,32 @@ svg.addEventListener('click', (e) => {
 
   const pos = getPos(e);
 
-  if (currentTool === 'oval') {
-    deselect();
-    createOval(pos.x, pos.y);
-    updateLegend();
-  } else if (currentTool === 'arrow') {
-    if (!arrowStart) {
-      // First click: set start point
-      arrowStart = pos;
-      showArrowStartDot(pos);
-      INFO.textContent = 'Click again to place the arrow end point';
-    } else {
-      // Second click: create the arrow
-      createArrow(arrowStart.x, arrowStart.y, pos.x, pos.y);
-      cancelArrowPlacement();
+  switch (currentTool) {
+    case 'select':
+      // Just deselect — clicking the background clears selection
+      deselect();
+      break;
+
+    case 'oval':
+      deselect();
+      createOval(pos.x, pos.y);
       updateLegend();
-      INFO.textContent = 'Click to set the arrow start point';
-    }
+      break;
+
+    case 'arrow':
+      if (!arrowStart) {
+        // First click: set start point
+        arrowStart = pos;
+        showArrowStartDot(pos);
+        INFO.textContent = 'Click again to place the arrow end point';
+      } else {
+        // Second click: create the arrow
+        createArrow(arrowStart.x, arrowStart.y, pos.x, pos.y);
+        cancelArrowPlacement();
+        updateLegend();
+        INFO.textContent = 'Click to set the arrow start point';
+      }
+      break;
   }
 });
 
@@ -559,7 +607,7 @@ function updateLegend() {
 
   lines.forEach((el) => {
     const stroke = el.getAttribute('stroke');
-    if (stroke && !stroke.startsWith('rgba') && stroke !== '#fbbf24') {
+    if (stroke && stroke !== 'transparent' && !stroke.startsWith('rgba') && stroke !== '#fbbf24') {
       // Only add if not already tracked as a fill color
       if (!colorsInUse.has(stroke)) {
         colorsInUse.set(stroke, 'stroke');
