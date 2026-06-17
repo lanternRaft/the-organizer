@@ -1,8 +1,8 @@
 // ── Entry point: initialises SVG defs, toolbar, and top-level event listeners ──
 
-import { svg, bgRect, INFO, defs, currentTool, selected, selectedType, setCurrentTool } from './state.js';
-import { getPos, findOvalAt, ellipseAttrs, getEllipseEdgePoint } from './helpers.js';
-import { deselect, updateLegend, hideContextMenu } from './select.js';
+import { svg, bgRect, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, setCurrentTool } from './state.js';
+import { getPos, findOvalAt, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText } from './helpers.js';
+import { deselect, selectElement, updateLegend, hideContextMenu } from './select.js';
 import { createOval, showTextInput, hideTextInput } from './oval.js';
 import {
   createArrow, cancelArrowPlacement,
@@ -148,6 +148,82 @@ svg.addEventListener('mousemove', (e) => {
   updateArrowPreview(pos);
 });
 
+// ── Clipboard (in-memory) ────────────────────────────────
+
+let _clipboard = [];
+
+function copyToClipboard() {
+  _clipboard = [];
+  for (const el of selectedSet) {
+    const type = selectedTypes.get(el);
+    if (type === 'ellipse') {
+      _clipboard.push({
+        type: 'ellipse',
+        cx: parseFloat(el.getAttribute('cx')),
+        cy: parseFloat(el.getAttribute('cy')),
+        rx: parseFloat(el.getAttribute('rx')),
+        ry: parseFloat(el.getAttribute('ry')),
+        fill: el.getAttribute('fill'),
+        text: el._text || null,
+      });
+    } else if (type === 'arrow') {
+      _clipboard.push({
+        type: 'arrow',
+        x1: el._x1,
+        y1: el._y1,
+        x2: el._x2,
+        y2: el._y2,
+        offset: el._offset || 0,
+        color: el._visPath.getAttribute('stroke'),
+      });
+    }
+  }
+}
+
+function pasteFromClipboard() {
+  if (_clipboard.length === 0) return;
+  const offset = 20;
+  const newElements = [];
+
+  for (const data of _clipboard) {
+    if (data.type === 'ellipse') {
+      const el = createOval(data.cx + offset, data.cy + offset);
+      el.setAttribute('rx', data.rx);
+      el.setAttribute('ry', data.ry);
+      el.setAttribute('fill', data.fill || '#3b82f6');
+      if (data.text) {
+        setOvalText(el, data.text);
+      }
+      newElements.push(el);
+    } else if (data.type === 'arrow') {
+      const el = createArrow(
+        data.x1 + offset, data.y1 + offset,
+        data.x2 + offset, data.y2 + offset,
+        null, null
+      );
+      el._offset = data.offset || 0;
+      if (data.offset) {
+        updateArrowPath(el);
+      }
+      if (data.color) {
+        el._visPath.setAttribute('stroke', data.color);
+        el._visPath.setAttribute('data-original-color', data.color);
+        updateArrowMarker(el._visPath, data.color);
+      }
+      newElements.push(el);
+    }
+  }
+
+  // Select all pasted elements
+  deselect();
+  for (const el of newElements) {
+    const type = el.tagName === 'ellipse' ? 'ellipse' : 'arrow';
+    selectElement(el, type, true);
+  }
+
+  updateLegend();
+}
+
 // ── Keyboard shortcut ───────────────────────────────────
 
 document.addEventListener('keydown', (e) => {
@@ -161,6 +237,68 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && selected && selectedType === 'ellipse') {
     e.preventDefault();
     showTextInput(selected);
+  }
+
+  // Ctrl+C / Cmd+C: copy selected
+  if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+    if (selectedSet.size > 0) {
+      e.preventDefault();
+      copyToClipboard();
+      INFO.textContent = `Copied ${selectedSet.size} element${selectedSet.size > 1 ? 's' : ''}`;
+    }
+    return;
+  }
+
+  // Ctrl+V / Cmd+V: paste
+  if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+    if (_clipboard.length > 0) {
+      e.preventDefault();
+      pasteFromClipboard();
+      INFO.textContent = `Pasted ${_clipboard.length} element${_clipboard.length > 1 ? 's' : ''}`;
+    }
+    return;
+  }
+
+  // Ctrl+A / Cmd+A: select all
+  if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+    e.preventDefault();
+    const all = svg.querySelectorAll('ellipse, g');
+    if (all.length === 0) return;
+    deselect();
+    for (const el of all) {
+      const type = el.tagName === 'ellipse' ? 'ellipse' : 'arrow';
+      selectElement(el, type, true);
+    }
+    INFO.textContent = `Selected ${selectedSet.size} elements`;
+    return;
+  }
+
+  // Delete / Backspace: delete selected elements
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selectedSet.size > 0) {
+    // Only in select tool, not when editing text
+    if (currentTool !== 'select') return;
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.target.isContentEditable) return;
+
+    e.preventDefault();
+    const affected = [...selectedSet];
+    deselect();
+    for (const el of affected) {
+      const elType = selectedTypes.get(el);
+      if (elType === 'ellipse') {
+        removeOvalText(el);
+        const arrows = svg.querySelectorAll('g');
+        arrows.forEach((group) => {
+          if (group._anchors) {
+            group._anchors = group._anchors.filter(a => a.ellipse !== el);
+          }
+        });
+      }
+      el.remove();
+    }
+    updateLegend();
+    INFO.textContent = `Deleted ${affected.length} element${affected.length > 1 ? 's' : ''}`;
+    return;
   }
 });
 
