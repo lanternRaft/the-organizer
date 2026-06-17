@@ -16,7 +16,7 @@ export function showTextInput(ellipse) {
   // Remove any existing input
   hideTextInput();
 
-  const { cx, cy } = ellipseAttrs(ellipse);
+  const { cx, cy, rx, ry } = ellipseAttrs(ellipse);
 
   // Get the SVG's on-screen position for the shape center
   const pt = svg.createSVGPoint();
@@ -24,41 +24,55 @@ export function showTextInput(ellipse) {
   pt.y = cy;
   const screenPt = pt.matrixTransform(svg.getScreenCTM());
 
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.value = ellipse._text || '';
-  input.placeholder = 'Type text...';
+  // Estimate a reasonable textarea size based on shape size
+  const screenRx = Math.abs(ellipse.getScreenCTM().a) * rx;
+  const screenRy = Math.abs(ellipse.getScreenCTM().d) * ry;
+
+  const textarea = document.createElement('textarea');
+  textarea.value = ellipse._text || '';
+  textarea.placeholder = 'Type text...';
+  textarea.rows = 3;
+  textarea.wrap = 'soft';
 
   // Position it centered over the shape's screen position
   const inputX = screenPt.x;
   const inputY = screenPt.y;
 
-  input.style.position = 'fixed';
-  input.style.left = inputX + 'px';
-  input.style.top = inputY + 'px';
-  input.style.transform = 'translate(-50%, -50%)';
-  input.style.zIndex = '2000';
-  input.style.background = 'rgba(15, 23, 42, 0.95)';
-  input.style.border = '2px solid #fbbf24';
-  input.style.borderRadius = '8px';
-  input.style.padding = '8px 14px';
-  input.style.color = '#ffffff';
-  input.style.fontSize = '16px';
-  input.style.fontFamily = 'sans-serif';
-  input.style.outline = 'none';
-  input.style.textAlign = 'center';
-  input.style.minWidth = '120px';
-  input.style.maxWidth = '300px';
-  input.style.boxShadow = '0 8px 32px rgba(0,0,0,0.6)';
+  textarea.style.position = 'fixed';
+  textarea.style.left = inputX + 'px';
+  textarea.style.top = inputY + 'px';
+  textarea.style.transform = 'translate(-50%, -50%)';
+  textarea.style.zIndex = '2000';
+  textarea.style.background = 'rgba(15, 23, 42, 0.95)';
+  textarea.style.border = '2px solid #fbbf24';
+  textarea.style.borderRadius = '8px';
+  textarea.style.padding = '8px 14px';
+  textarea.style.color = '#ffffff';
+  textarea.style.fontSize = '16px';
+  textarea.style.fontFamily = 'sans-serif';
+  textarea.style.outline = 'none';
+  textarea.style.textAlign = 'center';
+  textarea.style.resize = 'none';
+  textarea.style.overflow = 'hidden';
+  textarea.style.minWidth = '140px';
+  textarea.style.minHeight = '60px';
+  textarea.style.width = Math.max(140, screenRx * 1.6) + 'px';
+  textarea.style.boxShadow = '0 8px 32px rgba(0,0,0,0.6)';
 
-  document.body.appendChild(input);
-  input.focus();
-  input.select();
+  // Auto-resize as user types
+  function autoResize() {
+    textarea.style.height = 'auto';
+    textarea.style.height = textarea.scrollHeight + 'px';
+  }
+
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
 
   function commit() {
-    // Guard: only commit if this input is still active
-    if (textInput !== input) return;
-    const val = input.value.trim();
+    // Guard: only commit if this textarea is still active
+    if (textInput !== textarea) return;
+    const val = textarea.value.trim();
     if (val) {
       setOvalText(ellipse, val);
     } else if (ellipse._text) {
@@ -68,8 +82,8 @@ export function showTextInput(ellipse) {
     hideTextInput();
   }
 
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       commit();
     }
@@ -79,9 +93,13 @@ export function showTextInput(ellipse) {
     }
   });
 
-  input.addEventListener('blur', commit);
+  textarea.addEventListener('input', autoResize);
+  textarea.addEventListener('blur', commit);
 
-  textInput = input;
+  // Initial resize to fit content
+  requestAnimationFrame(autoResize);
+
+  textInput = textarea;
 }
 
 export function hideTextInput() {

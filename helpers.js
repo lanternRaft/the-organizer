@@ -159,10 +159,100 @@ export function updateArrowMarker(lineEl, color) {
 
 // ── Oval text helpers ───────────────────────────────────
 
+/**
+ * Word-wrap text into lines that fit within maxWidth at the given fontSize.
+ * Uses a temporary SVG text element for accurate measurement.
+ */
+function wrapText(text, fontSize, maxWidth) {
+  if (!text) return [];
+
+  const temp = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  temp.setAttribute('font-size', fontSize + 'px');
+  temp.setAttribute('font-family', 'sans-serif');
+  svg.appendChild(temp);
+
+  const lines = [];
+  const rawLines = text.split('\n');
+
+  for (const rawLine of rawLines) {
+    if (rawLine === '') {
+      lines.push('');
+      continue;
+    }
+    const words = rawLine.split(' ');
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine ? currentLine + ' ' + word : word;
+      temp.textContent = testLine;
+      if (temp.getComputedTextLength() > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+  }
+
+  svg.removeChild(temp);
+  return lines;
+}
+
+/**
+ * Find the largest font size such that wrapped text fits vertically
+ * within the shape (ry * 1.6) and each line fits horizontally (rx * 1.4).
+ */
+function fitFontSize(text, rx, ry) {
+  const maxWidth = Math.max(30, rx * 1.4);
+  const maxHeight = ry * 1.6;
+  let fontSize = Math.min(rx, ry) * 0.55;
+
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const lines = wrapText(text, fontSize, maxWidth);
+    const totalHeight = lines.length * fontSize * 1.4;
+    if (totalHeight <= maxHeight || fontSize <= 8) break;
+    fontSize *= 0.8;
+  }
+
+  return Math.max(8, fontSize);
+}
+
+function buildTextElement(ellipse, text, textEl) {
+  const { cx, cy, rx, ry } = ellipseAttrs(ellipse);
+  const maxWidth = Math.max(30, rx * 1.4);
+  const fontSize = fitFontSize(text, rx, ry);
+  const lineHeight = fontSize * 1.4;
+  const lines = wrapText(text, fontSize, maxWidth);
+
+  textEl.setAttribute('x', cx);
+  textEl.setAttribute('y', cy);
+  textEl.setAttribute('font-size', fontSize + 'px');
+  textEl.setAttribute('text-anchor', 'middle');
+  textEl.setAttribute('dominant-baseline', 'central');
+  textEl.setAttribute('fill', '#ffffff');
+  textEl.setAttribute('font-family', 'sans-serif');
+  textEl.setAttribute('pointer-events', 'none');
+  textEl.setAttribute('user-select', 'none');
+
+  // Vertically center the block of lines
+  const totalHeight = lines.length * lineHeight;
+  const startY = cy - totalHeight / 2 + lineHeight / 2;
+
+  lines.forEach((line, i) => {
+    const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+    tspan.setAttribute('x', cx);
+    tspan.setAttribute('dy', i === 0 ? (startY - cy) : lineHeight);
+    tspan.textContent = line || ' ';
+    textEl.appendChild(tspan);
+  });
+
+  ellipse._textLines = lines;
+}
+
 export function setOvalText(ellipse, text) {
   ellipse._text = text;
 
-  // Remove existing text element if any
   if (ellipse._textEl) {
     ellipse._textEl.remove();
     ellipse._textEl = null;
@@ -171,23 +261,7 @@ export function setOvalText(ellipse, text) {
   if (!text) return;
 
   const textEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-  const { cx, cy, rx, ry } = ellipseAttrs(ellipse);
-  textEl.setAttribute('x', cx);
-  textEl.setAttribute('y', cy);
-  textEl.setAttribute('text-anchor', 'middle');
-  textEl.setAttribute('dominant-baseline', 'central');
-  textEl.setAttribute('fill', '#ffffff');
-  textEl.setAttribute('font-size', Math.min(rx, ry) * 0.8 + 'px');
-  textEl.setAttribute('font-family', 'sans-serif');
-  textEl.setAttribute('pointer-events', 'none');
-  textEl.setAttribute('user-select', 'none');
-  textEl.textContent = text;
-
-  // Reduce font size if text is too wide
-  const words = text.length;
-  const maxWidth = rx * 1.6;
-  const fontSize = Math.min(Math.min(rx, ry) * 0.8, maxWidth / words * 1.2);
-  textEl.setAttribute('font-size', Math.max(8, fontSize) + 'px');
+  buildTextElement(ellipse, text, textEl);
 
   svg.appendChild(textEl);
   ellipse._textEl = textEl;
@@ -195,11 +269,12 @@ export function setOvalText(ellipse, text) {
 
 export function updateOvalTextPosition(ellipse) {
   if (!ellipse._textEl) return;
-  const { cx, cy, rx, ry } = ellipseAttrs(ellipse);
-  ellipse._textEl.setAttribute('x', cx);
-  ellipse._textEl.setAttribute('y', cy);
-  const fontSize = Math.min(Math.min(rx, ry) * 0.8, rx * 1.6 / (ellipse._text || 'X').length * 1.2);
-  ellipse._textEl.setAttribute('font-size', Math.max(8, fontSize) + 'px');
+
+  // Clear existing tspans and rebuild
+  const tspans = ellipse._textEl.querySelectorAll('tspan');
+  for (const t of tspans) t.remove();
+
+  buildTextElement(ellipse, ellipse._text || '', ellipse._textEl);
 }
 
 export function removeOvalText(ellipse) {
