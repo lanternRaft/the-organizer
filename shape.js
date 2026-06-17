@@ -4,8 +4,8 @@
 import { svg, selected, selectedType, currentTool, selectedSet, selectedTypes, shapeMode, INFO, ctxMenu } from './state.js';
 import {
   getPos, ellipseAttrs, setOvalText, removeOvalText,
-  updateOvalTextPosition, updateAnchoredArrows, updateAnchors, preventClick,
-  startMultiDrag
+  updateOvalTextPosition, updateAnchoredArrows, updateAnchors,
+  startMultiDrag, markDragHappened
 } from './helpers.js';
 import { selectElement, deselect, showEllipseHandles, updateLegend, showContextMenu, setHideTextInput } from './select.js';
 
@@ -139,6 +139,12 @@ export function createShape(x, y) {
     if (currentTool === 'arrow') return;
     // If the text input is showing, don't re-select (let it finish)
     if (textInput) return;
+    // If this click follows a drag on this element, suppress it to preserve the selection set
+    if (ellipse._ignoreNextClick) {
+      ellipse._ignoreNextClick = false;
+      e.stopPropagation();
+      return;
+    }
     e.stopPropagation();
     selectElement(ellipse, 'ellipse', e.shiftKey);
   });
@@ -149,8 +155,8 @@ export function createShape(x, y) {
     if (!selectedSet.has(ellipse)) {
       if (e.shiftKey) return;
       selectElement(ellipse, 'ellipse', false);
-      // Prevent the click event from also trying to select
-      ellipse.addEventListener('click', preventClick, { once: true });
+      // Suppress the click that follows to avoid re-running selectElement
+      ellipse._ignoreNextClick = true;
     }
     if (selectedTypes.get(ellipse) !== 'ellipse') return;
 
@@ -187,7 +193,9 @@ export function createShape(x, y) {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
       if (dragged) {
-        ellipse.addEventListener('click', preventClick, { once: true });
+        markDragHappened();
+        // Suppress the click that follows a drag to keep the selection intact
+        ellipse._ignoreNextClick = true;
       }
     }
 

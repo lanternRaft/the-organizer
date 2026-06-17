@@ -1,7 +1,7 @@
 // ── Entry point: initialises SVG defs, toolbar, and top-level event listeners ──
 
 import { svg, bgRect, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, setCurrentTool, shapeMode, setShapeMode } from './state.js';
-import { getPos, findOvalAt, findAnchorNear, getAnchorPoints, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText, showAnchors, hideAnchors, updateAnchors } from './helpers.js';
+import { getPos, findOvalAt, findAnchorNear, getAnchorPoints, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText, showAnchors, hideAnchors, updateAnchors, wasMultiDragged, wasDragHappened } from './helpers.js';
 import { deselect, selectElement, updateLegend, hideContextMenu, wasSelBoxDragged } from './select.js';
 import { createShape, showTextInput, hideTextInput } from './shape.js';
 import {
@@ -175,6 +175,14 @@ svg.addEventListener('click', (e) => {
     case 'select':
       // If a selection box drag just happened, skip (handled by mouseup)
       if (wasSelBoxDragged()) {
+        break;
+      }
+      // If a multi-drag just happened, skip (keeps selection)
+      if (wasMultiDragged()) {
+        break;
+      }
+      // If any drag just happened, skip (keeps selection)
+      if (wasDragHappened()) {
         break;
       }
       // Just deselect — clicking the background clears selection

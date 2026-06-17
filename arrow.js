@@ -4,7 +4,7 @@ import { svg, INFO, defs, selected, selectedType, currentTool, selectedSet, sele
 import {
   getPos, findOvalAt, ellipseAttrs, lineAttrs,
   getEllipseEdgePoint, updateArrowPath, setArrowAttrs,
-  preventClick, startMultiDrag
+  startMultiDrag
 } from './helpers.js';
 import { selectElement, showLineHandles, updateLegend, showContextMenu } from './select.js';
 
@@ -129,6 +129,12 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
   group.addEventListener('click', (e) => {
     // In arrow mode, don't stop propagation — let the SVG handler place the arrow
     if (currentTool === 'arrow') return;
+    // If this click follows a drag on this element, suppress it to preserve the selection set
+    if (group._ignoreNextClick) {
+      group._ignoreNextClick = false;
+      e.stopPropagation();
+      return;
+    }
     e.stopPropagation();
     selectElement(group, 'arrow', e.shiftKey);
   });
@@ -139,8 +145,8 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
     if (!selectedSet.has(group)) {
       if (e.shiftKey) return;
       selectElement(group, 'arrow', false);
-      // Prevent the click event from also trying to select
-      group.addEventListener('click', preventClick, { once: true });
+      // Suppress the click that follows to avoid re-running selectElement
+      group._ignoreNextClick = true;
     }
     if (selectedTypes.get(group) !== 'arrow') return;
     e.stopPropagation();
@@ -177,7 +183,8 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
       if (dragged) {
-        group.addEventListener('click', preventClick, { once: true });
+        // Suppress the click that follows a drag to keep the selection intact
+        group._ignoreNextClick = true;
       }
     }
 

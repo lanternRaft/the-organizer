@@ -443,6 +443,26 @@ export function preventClick(e) {
 
 // ── Multi-element drag ───────────────────────────────────
 
+let _multiDragged = false;
+let _dragHappened = false;
+
+export function wasMultiDragged() {
+  const val = _multiDragged;
+  _multiDragged = false;
+  return val;
+}
+
+/** General flag: set after any drag (single or multi), cleared on first check */
+export function markDragHappened() {
+  _dragHappened = true;
+}
+
+export function wasDragHappened() {
+  const val = _dragHappened;
+  _dragHappened = false;
+  return val;
+}
+
 export function startMultiDrag(e) {
   // Capture initial positions of all selected elements
   const startPos = getPos(e);
@@ -505,11 +525,11 @@ export function startMultiDrag(e) {
     document.removeEventListener('mousemove', onMove);
     document.removeEventListener('mouseup', onUp);
     if (dragged) {
-      // Prevent the click that follows a drag on the element that was mousedowned
-      // Find the element that was actually clicked (any selected element)
-      // To keep it simple, just prevent click on all selected elements
+      _multiDragged = true;
+      markDragHappened();
+      // Suppress the click on all dragged elements so the selection stays intact
       for (const snap of snapshots) {
-        snap.el.addEventListener('click', preventClick, { once: true });
+        snap.el._ignoreNextClick = true;
       }
     }
   }

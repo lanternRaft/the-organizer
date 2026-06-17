@@ -12,8 +12,7 @@ import {
   getEllipseEdgePoint, getArrowMidpoint,
   setArrowAttrs, updateArrowPath, updateArrowMarker,
   updateOvalTextPosition, updateAnchoredArrows,
-  showAnchors, hideAnchors, updateAnchors,
-  preventClick
+  showAnchors, hideAnchors, updateAnchors
 } from './helpers.js';
 
 // ── Selection ────────────────────────────────────────────
