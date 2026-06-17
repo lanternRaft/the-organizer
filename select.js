@@ -239,10 +239,17 @@ export function showEllipseHandles(el) {
   corners.forEach((c) => {
     createHandle(c.x, c.y, c.cursor, (pos) => {
       const { cx, cy } = ellipseAttrs(el);
-      const newRx = Math.max(10, Math.abs(pos.x - cx));
-      const newRy = Math.max(10, Math.abs(pos.y - cy));
-      el.setAttribute('rx', newRx);
-      el.setAttribute('ry', newRy);
+      if (shapeMode === 'circle') {
+        const dist = Math.sqrt((pos.x - cx) ** 2 + (pos.y - cy) ** 2);
+        const newR = Math.max(10, dist);
+        el.setAttribute('rx', newR);
+        el.setAttribute('ry', newR);
+      } else {
+        const newRx = Math.max(10, Math.abs(pos.x - cx));
+        const newRy = Math.max(10, Math.abs(pos.y - cy));
+        el.setAttribute('rx', newRx);
+        el.setAttribute('ry', newRy);
+      }
       showEllipseHandles(el);
       updateAnchoredArrows(el);
       updateOvalTextPosition(el);
