@@ -200,6 +200,7 @@ function selectElement(el, type) {
 }
 
 function deselect() {
+  hideTextInput();
   if (selected) {
     if (selectedType === 'ellipse') {
       selected.setAttribute('stroke', '#60a5fa');
@@ -261,8 +262,9 @@ ctxMenu.addEventListener('click', (e) => {
     const el = selected;
     const elType = selectedType;
     deselect();
-    // Clean up any arrow anchors pointing to this ellipse
+    // Clean up text and arrow anchors pointing to this ellipse
     if (elType === 'ellipse') {
+      removeOvalText(el);
       const arrows = svg.querySelectorAll('g');
       arrows.forEach((group) => {
         if (group._anchors) {
@@ -287,11 +289,20 @@ document.addEventListener('contextmenu', (e) => {
   hideContextMenu();
 });
 
-// Hide menu on Escape
+// Hide menu on Escape; Enter on selected oval → edit text
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     hideContextMenu();
     cancelArrowPlacement();
+    hideTextInput();
+  }
+
+  // Enter on a selected oval → start text editing
+  if (e.key === 'Enter' && selected && selectedType === 'ellipse' && !textInput) {
+    if (currentTool === 'select') {
+      e.preventDefault();
+      showTextInput(selected);
+    }
   }
 });
 
@@ -418,6 +429,7 @@ function showEllipseHandles(el) {
       el.setAttribute('ry', newRy);
       showEllipseHandles(el);
       updateAnchoredArrows(el);
+      updateOvalTextPosition(el);
     });
   });
 }
@@ -517,6 +529,142 @@ function showLineHandles(el) {
   });
 }
 
+// ── Oval text ────────────────────────────────────────────
+
+function setOvalText(ellipse, text) {
+  ellipse._text = text;
+
+  // Remove existing text element if any
+  if (ellipse._textEl) {
+    ellipse._textEl.remove();
+    ellipse._textEl = null;
+  }
+
+  if (!text) return;
+
+  const textEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  const { cx, cy, rx, ry } = ellipseAttrs(ellipse);
+  textEl.setAttribute('x', cx);
+  textEl.setAttribute('y', cy);
+  textEl.setAttribute('text-anchor', 'middle');
+  textEl.setAttribute('dominant-baseline', 'central');
+  textEl.setAttribute('fill', '#ffffff');
+  textEl.setAttribute('font-size', Math.min(rx, ry) * 0.8 + 'px');
+  textEl.setAttribute('font-family', 'sans-serif');
+  textEl.setAttribute('pointer-events', 'none');
+  textEl.setAttribute('user-select', 'none');
+  textEl.textContent = text;
+
+  // Reduce font size if text is too wide
+  const words = text.length;
+  const maxWidth = rx * 1.6;
+  const fontSize = Math.min(Math.min(rx, ry) * 0.8, maxWidth / words * 1.2);
+  textEl.setAttribute('font-size', Math.max(8, fontSize) + 'px');
+
+  svg.appendChild(textEl);
+  ellipse._textEl = textEl;
+}
+
+function updateOvalTextPosition(ellipse) {
+  if (!ellipse._textEl) return;
+  const { cx, cy, rx, ry } = ellipseAttrs(ellipse);
+  ellipse._textEl.setAttribute('x', cx);
+  ellipse._textEl.setAttribute('y', cy);
+  const fontSize = Math.min(Math.min(rx, ry) * 0.8, rx * 1.6 / (ellipse._text || 'X').length * 1.2);
+  ellipse._textEl.setAttribute('font-size', Math.max(8, fontSize) + 'px');
+}
+
+function removeOvalText(ellipse) {
+  if (ellipse._textEl) {
+    ellipse._textEl.remove();
+    ellipse._textEl = null;
+  }
+  ellipse._text = null;
+}
+
+// ── Inline text input overlay ────────────────────────────
+
+let textInput = null;
+
+function showTextInput(ellipse) {
+  // Remove any existing input
+  hideTextInput();
+
+  const { cx, cy } = ellipseAttrs(ellipse);
+
+  // Get the SVG's on-screen position for the oval center
+  const pt = svg.createSVGPoint();
+  pt.x = cx;
+  pt.y = cy;
+  const screenPt = pt.matrixTransform(svg.getScreenCTM());
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = ellipse._text || '';
+  input.placeholder = 'Type text...';
+
+  // Position it centered over the oval's screen position
+  const inputX = screenPt.x;
+  const inputY = screenPt.y;
+
+  input.style.position = 'fixed';
+  input.style.left = inputX + 'px';
+  input.style.top = inputY + 'px';
+  input.style.transform = 'translate(-50%, -50%)';
+  input.style.zIndex = '2000';
+  input.style.background = 'rgba(15, 23, 42, 0.95)';
+  input.style.border = '2px solid #fbbf24';
+  input.style.borderRadius = '8px';
+  input.style.padding = '8px 14px';
+  input.style.color = '#ffffff';
+  input.style.fontSize = '16px';
+  input.style.fontFamily = 'sans-serif';
+  input.style.outline = 'none';
+  input.style.textAlign = 'center';
+  input.style.minWidth = '120px';
+  input.style.maxWidth = '300px';
+  input.style.boxShadow = '0 8px 32px rgba(0,0,0,0.6)';
+
+  document.body.appendChild(input);
+  input.focus();
+  input.select();
+
+  function commit() {
+    // Guard: only commit if this input is still active
+    if (textInput !== input) return;
+    const val = input.value.trim();
+    if (val) {
+      setOvalText(ellipse, val);
+    } else if (ellipse._text) {
+      // Clear existing text
+      setOvalText(ellipse, '');
+    }
+    hideTextInput();
+  }
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commit();
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      hideTextInput();
+    }
+  });
+
+  input.addEventListener('blur', commit);
+
+  textInput = input;
+}
+
+function hideTextInput() {
+  if (textInput) {
+    textInput.remove();
+    textInput = null;
+  }
+}
+
 // ── Create oval ──────────────────────────────────────────
 
 function createOval(x, y) {
@@ -535,6 +683,8 @@ function createOval(x, y) {
   ellipse.addEventListener('click', (e) => {
     // In arrow mode, don't stop propagation — let the SVG handler place the arrow
     if (currentTool === 'arrow') return;
+    // If the text input is showing, don't re-select (let it finish)
+    if (textInput) return;
     e.stopPropagation();
     selectElement(ellipse, 'ellipse');
   });
@@ -559,6 +709,7 @@ function createOval(x, y) {
       ellipse.setAttribute('cy', startCy + dy);
       showEllipseHandles(ellipse);
       updateAnchoredArrows(ellipse);
+      updateOvalTextPosition(ellipse);
     }
 
     function onUp() {
@@ -577,6 +728,7 @@ function createOval(x, y) {
   ellipse.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (textInput) hideTextInput();
     selectElement(ellipse, 'ellipse');
     showContextMenu(e.clientX, e.clientY);
   });
