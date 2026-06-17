@@ -13,7 +13,8 @@ import {
   setArrowAttrs, updateArrowPath, updateArrowMarker,
   updateOvalTextPosition, updateAnchoredArrows,
   calculateSignedOffset,
-  showAnchors, hideAnchors, updateAnchors
+  showAnchors, hideAnchors, updateAnchors,
+  darkenColor, lightenColor
 } from './helpers.js';
 
 // ── Selection ────────────────────────────────────────────
@@ -41,7 +42,7 @@ export function selectElement(el, type, additive = false) {
       selectedSet.delete(el);
       selectedTypes.delete(el);
       if (type === 'ellipse') {
-        el.setAttribute('stroke', '#60a5fa');
+        el.setAttribute('stroke', darkenColor(el.getAttribute('fill'), 40));
         el.setAttribute('stroke-width', '2');
       } else if (type === 'arrow') {
         const orig = el._visPath.getAttribute('data-original-color') || '#3b82f6';
@@ -62,7 +63,7 @@ export function selectElement(el, type, additive = false) {
       selectedTypes.set(el, type);
       setSelected(el, type);
       if (type === 'ellipse') {
-        el.setAttribute('stroke', '#fbbf24');
+        el.setAttribute('stroke', lightenColor(el.getAttribute('fill'), 40));
         el.setAttribute('stroke-width', '3');
       } else if (type === 'arrow') {
         el._visPath.setAttribute('stroke', '#fbbf24');
@@ -88,7 +89,7 @@ export function selectElement(el, type, additive = false) {
     selectedTypes.set(el, type);
 
     if (type === 'ellipse') {
-      el.setAttribute('stroke', '#fbbf24');
+      el.setAttribute('stroke', lightenColor(el.getAttribute('fill'), 40));
       el.setAttribute('stroke-width', '3');
       showEllipseHandles(el);
       INFO.textContent = 'Drag a corner handle to resize, or drag the oval to move it';
@@ -121,7 +122,7 @@ export function deselect() {
   for (const el of selectedSet) {
     const type = selectedTypes.get(el);
     if (type === 'ellipse') {
-      el.setAttribute('stroke', '#60a5fa');
+      el.setAttribute('stroke', darkenColor(el.getAttribute('fill'), 40));
       el.setAttribute('stroke-width', '2');
     } else if (type === 'arrow') {
       const orig = el._visPath.getAttribute('data-original-color') || '#3b82f6';
@@ -232,6 +233,12 @@ function applyColor(color) {
     const elType = selectedTypes.get(el);
     if (elType === 'ellipse') {
       el.setAttribute('fill', color);
+      // Update stroke to match the new fill color
+      if (selectedSet.has(el)) {
+        el.setAttribute('stroke', lightenColor(color, 40));
+      } else {
+        el.setAttribute('stroke', darkenColor(color, 40));
+      }
     } else if (elType === 'arrow') {
       const vis = el._visPath;
       vis.setAttribute('stroke', color);

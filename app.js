@@ -1,7 +1,7 @@
 // ── Entry point: initialises SVG defs, toolbar, and top-level event listeners ──
 
 import { svg, bgRect, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, selMenu, colorPalette, setCurrentTool, shapeMode, setShapeMode } from './state.js';
-import { getPos, findOvalAt, findAnchorNear, getAnchorPoints, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText, showAnchors, hideAnchors, updateAnchors, wasMultiDragged, wasDragHappened } from './helpers.js';
+import { getPos, findOvalAt, findAnchorNear, getAnchorPoints, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText, showAnchors, hideAnchors, updateAnchors, wasMultiDragged, wasDragHappened, darkenColor, lightenColor } from './helpers.js';
 import { deselect, selectElement, updateLegend, hideContextMenu, wasSelBoxDragged } from './select.js';
 import { createShape, showTextInput, hideTextInput } from './shape.js';
 import {
@@ -301,6 +301,7 @@ function pasteFromClipboard() {
       el.setAttribute('rx', data.rx);
       el.setAttribute('ry', data.ry);
       el.setAttribute('fill', data.fill || '#3b82f6');
+      el.setAttribute('stroke', darkenColor(data.fill || '#3b82f6', 40));
       if (data.text) {
         setOvalText(el, data.text);
       }

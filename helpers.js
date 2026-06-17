@@ -315,6 +315,42 @@ export function updateAnchoredArrows(ellipse) {
   });
 }
 
+// ── Color utilities ─────────────────────────────────────
+
+/**
+ * Darken a hex color by the given percentage (0-100).
+ * @param {string} hex - Hex color like "#3b82f6"
+ * @param {number} percent - Amount to darken (e.g. 40 = 40% darker)
+ * @returns {string} Darkened hex color
+ */
+export function darkenColor(hex, percent) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const factor = 1 - percent / 100;
+  const nr = Math.max(0, Math.round(r * factor));
+  const ng = Math.max(0, Math.round(g * factor));
+  const nb = Math.max(0, Math.round(b * factor));
+  return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
+}
+
+/**
+ * Lighten a hex color by the given percentage (0-100).
+ * @param {string} hex - Hex color like "#3b82f6"
+ * @param {number} percent - Amount to lighten (e.g. 40 = 40% lighter)
+ * @returns {string} Lightened hex color
+ */
+export function lightenColor(hex, percent) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const factor = 1 + percent / 100;
+  const nr = Math.min(255, Math.round(r * factor));
+  const ng = Math.min(255, Math.round(g * factor));
+  const nb = Math.min(255, Math.round(b * factor));
+  return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
+}
+
 // ── Arrow marker helpers ────────────────────────────────
 
 export function updateArrowMarker(lineEl, color) {

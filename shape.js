@@ -5,7 +5,7 @@ import { svg, selected, selectedType, currentTool, selectedSet, selectedTypes, s
 import {
   getPos, ellipseAttrs, setOvalText, removeOvalText,
   updateOvalTextPosition, updateAnchoredArrows, updateAnchors,
-  startMultiDrag, markDragHappened
+  startMultiDrag, markDragHappened, darkenColor
 } from './helpers.js';
 import { selectElement, deselect, showEllipseHandles, updateLegend, setHideTextInput, hideContextMenu } from './select.js';
 
@@ -129,7 +129,7 @@ export function createShape(x, y) {
 
   ellipse.setAttribute('fill', '#3b82f6');
   ellipse.setAttribute('opacity', '0.9');
-  ellipse.setAttribute('stroke', '#60a5fa');
+  ellipse.setAttribute('stroke', darkenColor('#3b82f6', 40));
   ellipse.setAttribute('stroke-width', '2');
   ellipse.style.cursor = 'pointer';
 
