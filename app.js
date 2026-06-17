@@ -311,8 +311,8 @@ function pasteFromClipboard() {
         data.x2 + offset, data.y2 + offset,
         null, null
       );
-      el._offset = data.offset || 0;
-      if (data.offset) {
+      if (data.offset !== undefined) {
+        el._offset = data.offset;
         updateArrowPath(el);
       }
       if (data.color) {

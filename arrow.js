@@ -4,7 +4,7 @@ import { svg, INFO, defs, selected, selectedType, currentTool, selectedSet, sele
 import {
   getPos, findOvalAt, ellipseAttrs, lineAttrs,
   getEllipseEdgePoint, updateArrowPath, setArrowAttrs,
-  startMultiDrag
+  calculateSignedOffset, startMultiDrag
 } from './helpers.js';
 import { selectElement, showLineHandles, updateLegend } from './select.js';
 
@@ -12,7 +12,7 @@ import { selectElement, showLineHandles, updateLegend } from './select.js';
 let _arrowStart = null;       // { x, y } | null
 let _arrowStartAnchor = null; // oval element | null
 let _arrowStartLabel = null;  // 'top'|'left'|'bottom'|'right' | null
-let _arrowPreviewLine = null; // SVG line element
+let _arrowPreviewLine = null; // SVG path element for curved preview
 let _arrowPreviewDot = null;  // SVG circle element
 
 export function getArrowStart() {
@@ -53,18 +53,28 @@ export function cancelArrowPlacement() {
 
 export function updateArrowPreview(pos) {
   if (!_arrowPreviewLine) {
-    _arrowPreviewLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    _arrowPreviewLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     _arrowPreviewLine.setAttribute('stroke', 'rgba(59,130,246,0.4)');
     _arrowPreviewLine.setAttribute('stroke-width', '2');
     _arrowPreviewLine.setAttribute('stroke-dasharray', '6,4');
     _arrowPreviewLine.setAttribute('stroke-linecap', 'round');
+    _arrowPreviewLine.setAttribute('fill', 'none');
     _arrowPreviewLine.setAttribute('marker-end', 'url(#prev-arrowhead)');
     svg.appendChild(_arrowPreviewLine);
   }
-  _arrowPreviewLine.setAttribute('x1', _arrowStart.x);
-  _arrowPreviewLine.setAttribute('y1', _arrowStart.y);
-  _arrowPreviewLine.setAttribute('x2', pos.x);
-  _arrowPreviewLine.setAttribute('y2', pos.y);
+  // Compute the same subtle curve for the preview
+  const dx = pos.x - _arrowStart.x;
+  const dy = pos.y - _arrowStart.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  const offset = len > 10 ? Math.min(50, Math.max(20, len * 0.12)) : 0;
+  const cp = { x: (_arrowStart.x + pos.x) / 2, y: (_arrowStart.y + pos.y) / 2 };
+  if (len > 1) {
+    const nx = -dy / len;
+    const ny = dx / len;
+    cp.x += nx * offset;
+    cp.y += ny * offset;
+  }
+  _arrowPreviewLine.setAttribute('d', 'M ' + _arrowStart.x + ' ' + _arrowStart.y + ' Q ' + cp.x + ' ' + cp.y + ' ' + pos.x + ' ' + pos.y);
 }
 
 export function showArrowStartDot(pos) {
@@ -90,7 +100,16 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
   group._y1 = y1;
   group._x2 = x2;
   group._y2 = y2;
-  group._offset = 0;
+  // Build anchor array for offset sign calculation
+  const anchorsForOffset = [];
+  if (startAnchor) {
+    anchorsForOffset.push({ end: 'start', ellipse: startAnchor, anchorLabel: startAnchorLabel || 'right' });
+  }
+  if (endAnchor) {
+    anchorsForOffset.push({ end: 'end', ellipse: endAnchor, anchorLabel: endAnchorLabel || 'left' });
+  }
+  // Auto-calculate a signed curve offset that avoids shape bodies
+  group._offset = calculateSignedOffset(x1, y1, x2, y2, anchorsForOffset);
 
   // Store anchor references if provided (with cardinal label)
   if (startAnchor) {

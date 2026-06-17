@@ -12,6 +12,7 @@ import {
   getEllipseEdgePoint, getArrowMidpoint,
   setArrowAttrs, updateArrowPath, updateArrowMarker,
   updateOvalTextPosition, updateAnchoredArrows,
+  calculateSignedOffset,
   showAnchors, hideAnchors, updateAnchors
 } from './helpers.js';
 
@@ -384,6 +385,10 @@ export function showLineHandles(el) {
       el._anchors = el._anchors.filter(a => a.end !== 'start');
       el._anchors.push({ end: 'start', ellipse: snapped.ellipse, anchorLabel: snapped.anchorLabel });
       setArrowAttrs(el, { x1: snapped.anchorPos.x, y1: snapped.anchorPos.y });
+      // Recompute offset sign to avoid the shape
+      const { x1: nx1, y1: ny1, x2: nx2, y2: ny2 } = lineAttrs(el);
+      el._offset = calculateSignedOffset(nx1, ny1, nx2, ny2, el._anchors);
+      updateArrowPath(el);
       showLineHandles(el);
     }
   });
@@ -405,6 +410,10 @@ export function showLineHandles(el) {
       el._anchors = el._anchors.filter(a => a.end !== 'end');
       el._anchors.push({ end: 'end', ellipse: snapped.ellipse, anchorLabel: snapped.anchorLabel });
       setArrowAttrs(el, { x2: snapped.anchorPos.x, y2: snapped.anchorPos.y });
+      // Recompute offset sign to avoid the shape
+      const { x1: nx1, y1: ny1, x2: nx2, y2: ny2 } = lineAttrs(el);
+      el._offset = calculateSignedOffset(nx1, ny1, nx2, ny2, el._anchors);
+      updateArrowPath(el);
       showLineHandles(el);
     }
   });

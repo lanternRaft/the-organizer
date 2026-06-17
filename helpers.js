@@ -88,6 +88,40 @@ export function getArrowMidpoint(x1, y1, x2, y2, offset) {
   };
 }
 
+/**
+ * Calculate a signed offset for the arrow curve that pushes the bezier
+ * control point AWAY from the connected shapes' bodies, preventing the
+ * arrow from passing through them.
+ *
+ * @param {number} x1,y1 - Arrow start point
+ * @param {number} x2,y2 - Arrow end point
+ * @param {Array} anchors - Array of { end, ellipse, anchorLabel }
+ * @returns {number} Signed offset (positive = right-hand, negative = left-hand)
+ */
+export function calculateSignedOffset(x1, y1, x2, y2, anchors) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  const magnitude = len > 10 ? Math.min(50, Math.max(20, len * 0.12)) : 0;
+  if (magnitude === 0 || !anchors || anchors.length === 0) return magnitude;
+
+  // For each anchored shape, determine which side of the baseline its
+  // center falls on. Then push the curve to the OPPOSITE side.
+  let totalSide = 0;
+  for (const anchor of anchors) {
+    if (!anchor.ellipse || !anchor.ellipse.parentNode) continue;
+    const { cx, cy } = ellipseAttrs(anchor.ellipse);
+    // Cross product: positive = one side, negative = the other
+    const side = dx * (cy - y1) - dy * (cx - x1);
+    totalSide += Math.sign(side);
+  }
+
+  // If shapes lean to one side, flip offset sign to push curve away
+  // If totalSide is 0 (shapes on opposite sides or on the line), keep default
+  const sign = totalSide >= 0 ? 1 : -1;
+  return magnitude * sign;
+}
+
 // ── Anchor point system ────────────────────────────────────
 
 const ANCHOR_SNAP_RADIUS = 15;
