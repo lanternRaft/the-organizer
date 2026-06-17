@@ -63,6 +63,7 @@ ctxMenu.addEventListener('click', (e) => {
   const color = item.getAttribute('data-color');
   selected.setAttribute('fill', color);
   hideContextMenu();
+  updateLegend();
 });
 
 // Hide menu on any click outside
@@ -175,6 +176,70 @@ function createOval(x, y) {
   return ellipse;
 }
 
+// ── Legend ──────────────────────────────────────────────
+
+const legendEl = document.getElementById('legend');
+const legendColors = new Map(); // color -> { customName: string | null }
+
+function updateLegend() {
+  const ellipses = svg.querySelectorAll('ellipse');
+  const colorsInUse = new Set();
+  ellipses.forEach(el => {
+    const fill = el.getAttribute('fill');
+    if (fill) colorsInUse.add(fill);
+  });
+
+  // Remove colors no longer in use
+  for (const color of legendColors.keys()) {
+    if (!colorsInUse.has(color)) {
+      legendColors.delete(color);
+    }
+  }
+
+  // Add new colors (preserving insertion order = appearance order)
+  for (const color of colorsInUse) {
+    if (!legendColors.has(color)) {
+      legendColors.set(color, { customName: null });
+    }
+  }
+
+  if (colorsInUse.size === 0) {
+    legendEl.style.display = 'none';
+    return;
+  }
+  legendEl.style.display = 'block';
+
+  // Build legend HTML
+  let html = '<div class="legend-title">Keys</div>';
+  let idx = 1;
+  for (const [color, data] of legendColors) {
+    const displayName = data.customName || `Group ${idx}`;
+    html += `<div class="legend-item">
+      <span class="legend-swatch" style="background:${color}"></span>
+      <span class="legend-label" data-color="${color}" contenteditable="true">${displayName}</span>
+    </div>`;
+    idx++;
+  }
+  legendEl.innerHTML = html;
+
+  // Editable behavior: save custom name on blur / Enter
+  legendEl.querySelectorAll('.legend-label').forEach(label => {
+    label.addEventListener('blur', () => {
+      const color = label.getAttribute('data-color');
+      const text = label.textContent.trim();
+      legendColors.get(color).customName = text || null;
+      // Re-render to restore default if empty
+      updateLegend();
+    });
+    label.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        label.blur();
+      }
+    });
+  });
+}
+
 // ── SVG background click ─────────────────────────────────
 
 svg.addEventListener('click', (e) => {
@@ -184,4 +249,5 @@ svg.addEventListener('click', (e) => {
   const pos = getPos(e);
   deselect();
   createOval(pos.x, pos.y);
+  updateLegend();
 });

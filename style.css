@@ -27,6 +27,59 @@ svg {
   pointer-events: none;
 }
 
+/* ── Legend ───────────────────────────────────── */
+#legend {
+  display: none;
+  position: fixed;
+  bottom: 60px;
+  left: 20px;
+  background: rgba(30, 41, 59, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 10px 14px;
+  min-width: 100px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  z-index: 500;
+  font-family: sans-serif;
+  user-select: none;
+}
+#legend .legend-title {
+  font-size: 11px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  cursor: default;
+}
+#legend .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 13px;
+  color: #e2e8f0;
+}
+#legend .legend-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.2);
+  flex-shrink: 0;
+}
+#legend .legend-label {
+  cursor: text;
+  outline: none;
+  padding: 1px 4px;
+  border-radius: 4px;
+  transition: background 0.15s;
+  min-width: 10px;
+}
+#legend .legend-label:focus {
+  background: rgba(255,255,255,0.08);
+}
+
 /* ── Context menu ───────────────────────────────── */
 #ctx-menu {
   display: none;
