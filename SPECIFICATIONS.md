@@ -25,9 +25,8 @@ Menu with a little button to assign meanings to different colors of nodes, label
 
 ## Labels
 - Size and shape are adjustable
+  - Circle or square
 - Colorable
-
-## Circle/Ovals
 - Can place around
 - Connect to arrows
 - Put text on them
