@@ -1,9 +1,9 @@
 // ── Entry point: initialises SVG defs, toolbar, and top-level event listeners ──
 
-import { svg, bgRect, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, setCurrentTool } from './state.js';
+import { svg, bgRect, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, setCurrentTool, shapeMode, setShapeMode } from './state.js';
 import { getPos, findOvalAt, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText } from './helpers.js';
 import { deselect, selectElement, updateLegend, hideContextMenu, wasSelBoxDragged } from './select.js';
-import { createOval, showTextInput, hideTextInput } from './oval.js';
+import { createShape, showTextInput, hideTextInput } from './shape.js';
 import {
   createArrow, cancelArrowPlacement,
   updateArrowPreview, showArrowStartDot,
@@ -47,14 +47,59 @@ svg.insertBefore(defs, svg.firstChild);
 const toolbar = document.getElementById('toolbar');
 const toolBtns = toolbar.querySelectorAll('.tool-btn');
 
+const shapeDropdown = document.getElementById('shape-dropdown');
+const shapeLabel = document.getElementById('shape-label');
+const shapeOptions = shapeDropdown.querySelectorAll('.shape-option');
+const shapeToolWrap = document.getElementById('shape-tool-wrap');
+
+function updateShapeLabel() {
+  shapeLabel.textContent = shapeMode === 'circle' ? 'Circle' : 'Oval';
+  shapeOptions.forEach(opt => {
+    opt.classList.toggle('active-mode', opt.getAttribute('data-mode') === shapeMode);
+  });
+}
+updateShapeLabel();
+
+function hideShapeDropdown() {
+  shapeDropdown.classList.remove('show');
+}
+
+function showShapeDropdown() {
+  shapeDropdown.classList.add('show');
+}
+
 toolBtns.forEach(btn => {
   btn.addEventListener('click', () => {
     // Cancel any in-progress arrow placement
     cancelArrowPlacement();
 
+    const tool = btn.getAttribute('data-tool');
+
+    // Shape tool: show dropdown instead of immediately activating
+    if (tool === 'shape') {
+      const wasActive = btn.classList.contains('active');
+
+      // If shape was already active, just toggle the dropdown
+      if (wasActive) {
+        shapeDropdown.classList.toggle('show');
+        return;
+      }
+
+      toolBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      setCurrentTool('shape');
+
+      deselect();
+      showShapeDropdown();
+      return;
+    }
+
+    // For non-shape tools, hide dropdown and proceed normally
+    hideShapeDropdown();
+
     toolBtns.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
-    setCurrentTool(btn.getAttribute('data-tool'));
+    setCurrentTool(tool);
 
     deselect();
 
@@ -62,7 +107,7 @@ toolBtns.forEach(btn => {
       case 'select':
         INFO.textContent = 'Click an element to select it';
         break;
-      case 'oval':
+      case 'shape':
         INFO.textContent = 'Click the canvas to place an oval';
         break;
       case 'arrow':
@@ -72,12 +117,43 @@ toolBtns.forEach(btn => {
   });
 });
 
+// ── Shape option clicks ─────────────────────────────────
+
+shapeOptions.forEach(opt => {
+  opt.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const mode = opt.getAttribute('data-mode');
+    setShapeMode(mode);
+    updateShapeLabel();
+    hideShapeDropdown();
+
+    // Update the info text
+    if (currentTool === 'shape') {
+      INFO.textContent = mode === 'circle'
+        ? 'Click the canvas to place a circle'
+        : 'Click the canvas to place an oval';
+    }
+  });
+});
+
+// ── Hide dropdown on outside click ──────────────────────
+
+document.addEventListener('click', (e) => {
+  if (shapeToolWrap && shapeToolWrap.contains(e.target)) return;
+  hideShapeDropdown();
+});
+
+document.addEventListener('contextmenu', (e) => {
+  if (shapeToolWrap && shapeToolWrap.contains(e.target)) return;
+  hideShapeDropdown();
+});
+
 // ── SVG background click ─────────────────────────────────────
 
 svg.addEventListener('click', (e) => {
   const pos = getPos(e);
 
-  // For 'select' and 'oval', only handle background clicks
+  // For 'select' and 'shape', only handle background clicks
   // For 'arrow', allow clicks on any element (ovals, etc.)
   if (currentTool !== 'arrow') {
     if (e.target !== svg && e.target !== bgRect) return;
@@ -93,9 +169,9 @@ svg.addEventListener('click', (e) => {
       deselect();
       break;
 
-    case 'oval':
+    case 'shape':
       deselect();
-      createOval(pos.x, pos.y);
+      createShape(pos.x, pos.y);
       updateLegend();
       break;
 
@@ -191,7 +267,7 @@ function pasteFromClipboard() {
 
   for (const data of _clipboard) {
     if (data.type === 'ellipse') {
-      const el = createOval(data.cx + offset, data.cy + offset);
+      const el = createShape(data.cx + offset, data.cy + offset);
       el.setAttribute('rx', data.rx);
       el.setAttribute('ry', data.ry);
       el.setAttribute('fill', data.fill || '#3b82f6');

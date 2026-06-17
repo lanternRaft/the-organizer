@@ -6,7 +6,8 @@ export const INFO = document.querySelector('#info');
 export const ctxMenu = document.getElementById('ctx-menu');
 export const legendEl = document.getElementById('legend');
 
-export let currentTool = 'select'; // 'select', 'oval', or 'arrow'
+export let currentTool = 'select'; // 'select', 'shape', or 'arrow'
+export let shapeMode = 'oval'; // 'oval' or 'circle'
 export let selected = null;       // Primary SVG element (for handles/drag)
 export let selectedType = null;   // 'ellipse' or 'arrow'
 export const selectedSet = new Set();   // All selected SVG elements
@@ -19,6 +20,10 @@ export const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs
 
 export function setCurrentTool(tool) {
   currentTool = tool;
+}
+
+export function setShapeMode(mode) {
+  shapeMode = mode;
 }
 
 export function setSelected(el, type) {

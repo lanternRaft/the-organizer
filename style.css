@@ -70,6 +70,45 @@ svg {
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
 }
 
+/* ── Shape tool dropdown ─────────────────────────── */
+#shape-tool-wrap {
+  position: relative;
+}
+#shape-dropdown {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  padding: 4px;
+  min-width: 100px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  z-index: 700;
+  overflow: hidden;
+}
+#shape-dropdown.show {
+  display: block;
+}
+.shape-option {
+  padding: 8px 16px;
+  font-size: 13px;
+  color: #e2e8f0;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.shape-option:hover {
+  background: #334155;
+}
+.shape-option.active-mode {
+  background: #3b82f6;
+  color: #ffffff;
+}
+
 /* ── Legend ───────────────────────────────────── */
 #legend {
   display: none;

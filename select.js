@@ -3,7 +3,7 @@
 import {
   svg, bgRect, HANDLE_SIZE, handles, selected, selectedType,
   selectedSet, selectedTypes,
-  INFO, ctxMenu, legendEl, legendColors, currentTool,
+  INFO, ctxMenu, legendEl, legendColors, currentTool, shapeMode,
   setSelected, clearSelected
 } from './state.js';
 
@@ -115,8 +115,10 @@ export function deselect() {
     case 'select':
       INFO.textContent = 'Click an element to select it';
       break;
-    case 'oval':
-      INFO.textContent = 'Click the canvas to place an oval';
+    case 'shape':
+      INFO.textContent = shapeMode === 'circle'
+        ? 'Click the canvas to place a circle'
+        : 'Click the canvas to place an oval';
       break;
     case 'arrow':
       INFO.textContent = 'Click to set the arrow start point';

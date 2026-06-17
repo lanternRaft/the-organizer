@@ -25,7 +25,8 @@ Menu with a little button to assign meanings to different colors of nodes, label
 
 ## Labels
 - Size and shape are adjustable
-  - Circle or square
+  - Circle or oval
+  - 
 - Colorable
 - Can place around
 - Connect to arrows
@@ -34,3 +35,23 @@ Menu with a little button to assign meanings to different colors of nodes, label
 ## Other Notes
 - Light and Dark mode
 - Background grid that can be enabled and disabled
+
+
+
+## Feedback
+- Copy and paste via ctrl c/ctrl v
+Visible connect points for arrow
+
+Arrows
+= Auto calculate curve
+- But also manually with additional joints
+
+- Single click for menu, not right click
+
+Selected Border should be darker version of color
+
+Hold click tool for oval, circle
+
+Wrap text to better fit in circle
+
+After you place item go back to select

@@ -20,12 +20,19 @@
       </svg>
       <span>Select</span>
     </button>
-    <button class="tool-btn" data-tool="oval" title="Oval">
-      <svg width="20" height="20" viewBox="0 0 20 20">
-        <ellipse cx="10" cy="10" rx="8" ry="5" fill="none" stroke="currentColor" stroke-width="2"/>
-      </svg>
-      <span>Oval</span>
-    </button>
+    <div id="shape-tool-wrap">
+      <button class="tool-btn" data-tool="shape" title="Shape">
+        <svg width="20" height="20" viewBox="0 0 20 20">
+          <ellipse cx="10" cy="10" rx="8" ry="5" fill="none" stroke="currentColor" stroke-width="2"/>
+        </svg>
+        <span id="shape-label">Oval</span>
+      </button>
+      <div id="shape-dropdown">
+        <div class="shape-option" data-mode="oval">Oval</div>
+        <div class="shape-option" data-mode="circle">Circle</div>
+      </div>
+    </div>
+
     <button class="tool-btn" data-tool="arrow" title="Arrow">
       <svg width="20" height="20" viewBox="0 0 20 20">
         <line x1="3" y1="17" x2="17" y2="3" stroke="currentColor" stroke-width="2"/>

@@ -1,6 +1,7 @@
-// ── Oval creation & text editing ─────────────────────────
+// ── Shape creation & text editing ─────────────────────────
+// Supports two modes: 'oval' (default) and 'circle'
 
-import { svg, selected, selectedType, currentTool, selectedSet, selectedTypes, INFO, ctxMenu } from './state.js';
+import { svg, selected, selectedType, currentTool, selectedSet, selectedTypes, shapeMode, INFO, ctxMenu } from './state.js';
 import {
   getPos, ellipseAttrs, setOvalText, removeOvalText,
   updateOvalTextPosition, updateAnchoredArrows, preventClick,
@@ -17,7 +18,7 @@ export function showTextInput(ellipse) {
 
   const { cx, cy } = ellipseAttrs(ellipse);
 
-  // Get the SVG's on-screen position for the oval center
+  // Get the SVG's on-screen position for the shape center
   const pt = svg.createSVGPoint();
   pt.x = cx;
   pt.y = cy;
@@ -28,7 +29,7 @@ export function showTextInput(ellipse) {
   input.value = ellipse._text || '';
   input.placeholder = 'Type text...';
 
-  // Position it centered over the oval's screen position
+  // Position it centered over the shape's screen position
   const inputX = screenPt.x;
   const inputY = screenPt.y;
 
@@ -93,21 +94,28 @@ export function hideTextInput() {
 // Register with select module so deselect can hide text input
 setHideTextInput(() => hideTextInput());
 
-// ── Create oval ──────────────────────────────────────────
+// ── Create shape (oval or circle based on shapeMode) ─────
 
-export function createOval(x, y) {
+export function createShape(x, y) {
   const ellipse = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
   ellipse.setAttribute('cx', x);
   ellipse.setAttribute('cy', y);
-  ellipse.setAttribute('rx', 40);
-  ellipse.setAttribute('ry', 25);
+
+  if (shapeMode === 'circle') {
+    ellipse.setAttribute('rx', 40);
+    ellipse.setAttribute('ry', 40);
+  } else {
+    ellipse.setAttribute('rx', 40);
+    ellipse.setAttribute('ry', 25);
+  }
+
   ellipse.setAttribute('fill', '#3b82f6');
   ellipse.setAttribute('opacity', '0.9');
   ellipse.setAttribute('stroke', '#60a5fa');
   ellipse.setAttribute('stroke-width', '2');
   ellipse.style.cursor = 'pointer';
 
-  // Click on oval → select it
+  // Click on shape → select it
   ellipse.addEventListener('click', (e) => {
     // In arrow mode, don't stop propagation — let the SVG handler place the arrow
     if (currentTool === 'arrow') return;
@@ -117,7 +125,7 @@ export function createOval(x, y) {
     selectElement(ellipse, 'ellipse', e.shiftKey);
   });
 
-  // Mousedown on a selected oval → drag to move it
+  // Mousedown on a selected shape → drag to move it
   ellipse.addEventListener('mousedown', (e) => {
     if (!selectedSet.has(ellipse) || selectedTypes.get(ellipse) !== 'ellipse') return;
 
@@ -161,7 +169,7 @@ export function createOval(x, y) {
     document.addEventListener('mouseup', onUp);
   });
 
-  // Right-click on oval → show context menu
+  // Right-click on shape → show context menu
   ellipse.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     e.stopPropagation();
