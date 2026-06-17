@@ -297,12 +297,10 @@ document.addEventListener('keydown', (e) => {
     hideTextInput();
   }
 
-  // Enter on a selected oval → start text editing
+  // Enter on a selected oval → start text editing (any tool)
   if (e.key === 'Enter' && selected && selectedType === 'ellipse' && !textInput) {
-    if (currentTool === 'select') {
-      e.preventDefault();
-      showTextInput(selected);
-    }
+    e.preventDefault();
+    showTextInput(selected);
   }
 });
 
