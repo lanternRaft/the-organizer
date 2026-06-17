@@ -123,3 +123,27 @@ svg {
   border: 1px solid rgba(255,255,255,0.2);
   flex-shrink: 0;
 }
+
+#ctx-menu .ctx-divider {
+  height: 1px;
+  background: #334155;
+  margin: 4px 0;
+}
+
+#ctx-menu .ctx-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: #f87171;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+#ctx-menu .ctx-action:hover {
+  background: rgba(248, 113, 113, 0.12);
+}
+#ctx-menu .ctx-delete-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}

@@ -56,14 +56,22 @@ function hideContextMenu() {
   ctxMenu.style.display = 'none';
 }
 
-// Click a color in the context menu
+// Click a color or action in the context menu
 ctxMenu.addEventListener('click', (e) => {
-  const item = e.target.closest('.ctx-color');
+  const item = e.target.closest('.ctx-color, .ctx-action');
   if (!item || !selected) return;
-  const color = item.getAttribute('data-color');
-  selected.setAttribute('fill', color);
-  hideContextMenu();
-  updateLegend();
+
+  if (item.classList.contains('ctx-color')) {
+    const color = item.getAttribute('data-color');
+    selected.setAttribute('fill', color);
+    hideContextMenu();
+    updateLegend();
+  } else if (item.classList.contains('ctx-delete')) {
+    const el = selected;
+    deselect();
+    el.remove();
+    updateLegend();
+  }
 });
 
 // Hide menu on any click outside
@@ -164,6 +172,40 @@ function createOval(x, y) {
     selectEllipse(ellipse);
   });
 
+  // Mousedown on a selected oval → drag to move it
+  ellipse.addEventListener('mousedown', (e) => {
+    if (selected !== ellipse) return;
+    e.stopPropagation();
+    e.preventDefault();
+
+    const startPos = getPos(e);
+    const startCx = parseFloat(ellipse.getAttribute('cx'));
+    const startCy = parseFloat(ellipse.getAttribute('cy'));
+    let dragged = false;
+
+    function onMove(me) {
+      dragged = true;
+      const pos = getPos(me);
+      const dx = pos.x - startPos.x;
+      const dy = pos.y - startPos.y;
+      ellipse.setAttribute('cx', startCx + dx);
+      ellipse.setAttribute('cy', startCy + dy);
+      showHandles(ellipse);
+    }
+
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      // If the user actually dragged, suppress the upcoming click event
+      if (dragged) {
+        ellipse.addEventListener('click', preventClick, { once: true });
+      }
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
   // Right-click on oval → show context menu
   ellipse.addEventListener('contextmenu', (e) => {
     e.preventDefault();
@@ -174,6 +216,12 @@ function createOval(x, y) {
 
   svg.appendChild(ellipse);
   return ellipse;
+}
+
+// Prevent a click event once, used after a drag to avoid re-selecting
+function preventClick(e) {
+  e.stopPropagation();
+  e.preventDefault();
 }
 
 // ── Legend ──────────────────────────────────────────────
