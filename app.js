@@ -64,6 +64,14 @@ function hideShapeDropdown() {
   shapeDropdown.classList.remove('show');
 }
 
+function switchToSelectTool() {
+  toolBtns.forEach(b => b.classList.remove('active'));
+  document.querySelector('[data-tool="select"]').classList.add('active');
+  setCurrentTool('select');
+  hideShapeDropdown();
+  INFO.textContent = 'Click an element to select it';
+}
+
 function showShapeDropdown() {
   shapeDropdown.classList.add('show');
 }
@@ -173,6 +181,7 @@ svg.addEventListener('click', (e) => {
       deselect();
       createShape(pos.x, pos.y);
       updateLegend();
+      switchToSelectTool();
       break;
 
     case 'arrow': {
@@ -210,7 +219,7 @@ svg.addEventListener('click', (e) => {
         createArrow(sx, sy, ex, ey, arrowStartAnchor, endAnchor);
         cancelArrowPlacement();
         updateLegend();
-        INFO.textContent = 'Click to set the arrow start point';
+        switchToSelectTool();
       }
       break;
     }
