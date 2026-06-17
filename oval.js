@@ -1,9 +1,10 @@
 // ── Oval creation & text editing ─────────────────────────
 
-import { svg, selected, selectedType, currentTool, INFO, ctxMenu } from './state.js';
+import { svg, selected, selectedType, currentTool, selectedSet, selectedTypes, INFO, ctxMenu } from './state.js';
 import {
   getPos, ellipseAttrs, setOvalText, removeOvalText,
-  updateOvalTextPosition, updateAnchoredArrows, preventClick
+  updateOvalTextPosition, updateAnchoredArrows, preventClick,
+  startMultiDrag
 } from './helpers.js';
 import { selectElement, deselect, showEllipseHandles, updateLegend, showContextMenu, setHideTextInput } from './select.js';
 
@@ -118,7 +119,16 @@ export function createOval(x, y) {
 
   // Mousedown on a selected oval → drag to move it
   ellipse.addEventListener('mousedown', (e) => {
-    if (selected !== ellipse || selectedType !== 'ellipse') return;
+    if (!selectedSet.has(ellipse) || selectedTypes.get(ellipse) !== 'ellipse') return;
+
+    // Multi-drag: move all selected elements together
+    if (selectedSet.size > 1) {
+      e.stopPropagation();
+      e.preventDefault();
+      startMultiDrag(e);
+      return;
+    }
+
     e.stopPropagation();
     e.preventDefault();
 

@@ -1,10 +1,10 @@
 // ── Arrow creation & placement preview ───────────────────
 
-import { svg, INFO, defs, selected, selectedType, currentTool } from './state.js';
+import { svg, INFO, defs, selected, selectedType, currentTool, selectedSet, selectedTypes } from './state.js';
 import {
   getPos, findOvalAt, ellipseAttrs, lineAttrs,
   getEllipseEdgePoint, updateArrowPath, setArrowAttrs,
-  preventClick
+  preventClick, startMultiDrag
 } from './helpers.js';
 import { selectElement, showLineHandles, updateLegend, showContextMenu } from './select.js';
 
@@ -127,9 +127,15 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor) {
 
   // Mousedown on a selected arrow → drag to move it
   group.addEventListener('mousedown', (e) => {
-    if (selected !== group || selectedType !== 'arrow') return;
+    if (!selectedSet.has(group) || selectedTypes.get(group) !== 'arrow') return;
     e.stopPropagation();
     e.preventDefault();
+
+    // Multi-drag: move all selected elements together
+    if (selectedSet.size > 1) {
+      startMultiDrag(e);
+      return;
+    }
 
     // Detach all anchors when dragging the whole arrow
     if (group._anchors) {

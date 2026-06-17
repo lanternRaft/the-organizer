@@ -1,6 +1,6 @@
 // ── Pure utility functions & DOM helpers ──────────────────
 
-import { svg, defs } from './state.js';
+import { svg, defs, selectedSet, selectedTypes } from './state.js';
 
 // ── Coordinate helpers ────────────────────────────────────
 
@@ -215,4 +215,80 @@ export function removeOvalText(ellipse) {
 export function preventClick(e) {
   e.stopPropagation();
   e.preventDefault();
+}
+
+// ── Multi-element drag ───────────────────────────────────
+
+export function startMultiDrag(e) {
+  // Capture initial positions of all selected elements
+  const startPos = getPos(e);
+  const snapshots = [];
+
+  for (const el of selectedSet) {
+    const type = selectedTypes.get(el);
+    if (type === 'ellipse') {
+      snapshots.push({
+        el,
+        type: 'ellipse',
+        cx: parseFloat(el.getAttribute('cx')),
+        cy: parseFloat(el.getAttribute('cy')),
+      });
+    } else if (type === 'arrow') {
+      snapshots.push({
+        el,
+        type: 'arrow',
+        x1: el._x1,
+        y1: el._y1,
+        x2: el._x2,
+        y2: el._y2,
+      });
+    }
+  }
+
+  let dragged = false;
+
+  function onMove(me) {
+    dragged = true;
+    const pos = getPos(me);
+    const dx = pos.x - startPos.x;
+    const dy = pos.y - startPos.y;
+
+    for (const snap of snapshots) {
+      if (snap.type === 'ellipse') {
+        snap.el.setAttribute('cx', snap.cx + dx);
+        snap.el.setAttribute('cy', snap.cy + dy);
+        updateOvalTextPosition(snap.el);
+      } else if (snap.type === 'arrow') {
+        setArrowAttrs(snap.el, {
+          x1: snap.x1 + dx,
+          y1: snap.y1 + dy,
+          x2: snap.x2 + dx,
+          y2: snap.y2 + dy,
+        });
+      }
+    }
+
+    // Update anchored arrows after all elements are moved
+    for (const snap of snapshots) {
+      if (snap.type === 'ellipse') {
+        updateAnchoredArrows(snap.el);
+      }
+    }
+  }
+
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    if (dragged) {
+      // Prevent the click that follows a drag on the element that was mousedowned
+      // Find the element that was actually clicked (any selected element)
+      // To keep it simple, just prevent click on all selected elements
+      for (const snap of snapshots) {
+        snap.el.addEventListener('click', preventClick, { once: true });
+      }
+    }
+  }
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
 }
