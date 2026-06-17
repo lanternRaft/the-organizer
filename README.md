@@ -1,1 +1,5 @@
 An HTML, JavaScript and CSS based SVG system for world building via notes and flow
+
+
+To run
+`npx serve`
