@@ -45,6 +45,7 @@ const ctxMenu = document.getElementById('ctx-menu');
 
 // Arrow placement state
 let arrowStart = null;       // { x, y } | null
+let arrowStartAnchor = null; // oval element | null (start anchored to this oval)
 let arrowPreviewLine = null; // SVG line element
 let arrowPreviewDot = null;  // SVG circle element
 
@@ -78,6 +79,29 @@ toolBtns.forEach(btn => {
 });
 
 // ── Helpers ──────────────────────────────────────────────
+
+function findOvalAt(pos) {
+  const ellipses = svg.querySelectorAll('ellipse');
+  for (const el of ellipses) {
+    const { cx, cy, rx, ry } = ellipseAttrs(el);
+    const dx = (pos.x - cx) / rx;
+    const dy = (pos.y - cy) / ry;
+    if (dx * dx + dy * dy <= 1) {
+      return el;
+    }
+  }
+  return null;
+}
+
+function getEllipseEdgePoint(cx, cy, rx, ry, fromX, fromY) {
+  const dx = fromX - cx;
+  const dy = fromY - cy;
+  if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) {
+    return { x: cx + rx, y: cy };
+  }
+  const t = 1 / Math.sqrt((dx / rx) ** 2 + (dy / ry) ** 2);
+  return { x: cx + dx * t, y: cy + dy * t };
+}
 
 function getPos(e) {
   const r = svg.getBoundingClientRect();
@@ -195,7 +219,17 @@ ctxMenu.addEventListener('click', (e) => {
     updateLegend();
   } else if (item.classList.contains('ctx-delete')) {
     const el = selected;
+    const elType = selectedType;
     deselect();
+    // Clean up any arrow anchors pointing to this ellipse
+    if (elType === 'ellipse') {
+      const arrows = svg.querySelectorAll('g');
+      arrows.forEach((group) => {
+        if (group._anchors) {
+          group._anchors = group._anchors.filter(a => a.ellipse !== el);
+        }
+      });
+    }
     el.remove();
     updateLegend();
   }
@@ -220,6 +254,39 @@ document.addEventListener('keydown', (e) => {
     cancelArrowPlacement();
   }
 });
+
+// ── Anchored arrows ──────────────────────────────────────
+
+function updateAnchoredArrows(ellipse) {
+  const { cx, cy, rx, ry } = ellipseAttrs(ellipse);
+  const arrows = svg.querySelectorAll('g');
+  arrows.forEach((group) => {
+    if (!group._anchors || group._anchors.length === 0) return;
+    let updated = false;
+    const cur = lineAttrs(group);
+
+    const startAnchor = group._anchors.find(a => a.end === 'start');
+    const endAnchor = group._anchors.find(a => a.end === 'end');
+
+    if (startAnchor && startAnchor.ellipse === ellipse) {
+      const edge = getEllipseEdgePoint(cx, cy, rx, ry, cur.x2, cur.y2);
+      setArrowAttrs(group, { x1: edge.x, y1: edge.y });
+      updated = true;
+    }
+
+    if (endAnchor && endAnchor.ellipse === ellipse) {
+      // Re-read in case start was just updated
+      const cur2 = lineAttrs(group);
+      const edge = getEllipseEdgePoint(cx, cy, rx, ry, cur2.x1, cur2.y1);
+      setArrowAttrs(group, { x2: edge.x, y2: edge.y });
+      updated = true;
+    }
+
+    if (updated && selected === group) {
+      showLineHandles(group);
+    }
+  });
+}
 
 // ── Arrow marker helpers ────────────────────────────────
 
@@ -253,7 +320,7 @@ function removeHandles() {
   handles.length = 0;
 }
 
-function createHandle(x, y, cursor, onDrag) {
+function createHandle(x, y, cursor, onDrag, onDragEnd) {
   const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
   rect.setAttribute('x', x - HANDLE_SIZE / 2);
   rect.setAttribute('y', y - HANDLE_SIZE / 2);
@@ -282,6 +349,7 @@ function createHandle(x, y, cursor, onDrag) {
     function onUp() {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
+      if (onDragEnd) onDragEnd();
     }
 
     document.addEventListener('mousemove', onMove);
@@ -309,6 +377,7 @@ function showEllipseHandles(el) {
       el.setAttribute('rx', newRx);
       el.setAttribute('ry', newRy);
       showEllipseHandles(el);
+      updateAnchoredArrows(el);
     });
   });
 }
@@ -321,6 +390,10 @@ function showLineHandles(el) {
 
   // Handle at start point
   createHandle(x1, y1, 'grab', (pos) => {
+    // Detach start anchor when manually moved
+    if (el._anchors) {
+      el._anchors = el._anchors.filter(a => a.end !== 'start');
+    }
     if (el.tagName === 'g') {
       setArrowAttrs(el, { x1: pos.x, y1: pos.y });
     } else {
@@ -328,10 +401,26 @@ function showLineHandles(el) {
       el.setAttribute('y1', pos.y);
     }
     showLineHandles(el);
+  }, () => {
+    // On drag end: check if endpoint is on an oval → anchor
+    const { x1, y1, x2, y2 } = lineAttrs(el);
+    const oval = findOvalAt({ x: x1, y: y1 });
+    if (oval) {
+      if (!el._anchors) el._anchors = [];
+      el._anchors = el._anchors.filter(a => a.end !== 'start');
+      el._anchors.push({ end: 'start', ellipse: oval });
+      const edge = getEllipseEdgePoint(...Object.values(ellipseAttrs(oval)), x2, y2);
+      setArrowAttrs(el, { x1: edge.x, y1: edge.y });
+      showLineHandles(el);
+    }
   });
 
   // Handle at end point
   createHandle(x2, y2, 'grab', (pos) => {
+    // Detach end anchor when manually moved
+    if (el._anchors) {
+      el._anchors = el._anchors.filter(a => a.end !== 'end');
+    }
     if (el.tagName === 'g') {
       setArrowAttrs(el, { x2: pos.x, y2: pos.y });
     } else {
@@ -339,6 +428,18 @@ function showLineHandles(el) {
       el.setAttribute('y2', pos.y);
     }
     showLineHandles(el);
+  }, () => {
+    // On drag end: check if endpoint is on an oval → anchor
+    const { x1, y1, x2, y2 } = lineAttrs(el);
+    const oval = findOvalAt({ x: x2, y: y2 });
+    if (oval) {
+      if (!el._anchors) el._anchors = [];
+      el._anchors = el._anchors.filter(a => a.end !== 'end');
+      el._anchors.push({ end: 'end', ellipse: oval });
+      const edge = getEllipseEdgePoint(...Object.values(ellipseAttrs(oval)), x1, y1);
+      setArrowAttrs(el, { x2: edge.x, y2: edge.y });
+      showLineHandles(el);
+    }
   });
 }
 
@@ -358,6 +459,8 @@ function createOval(x, y) {
 
   // Click on oval → select it
   ellipse.addEventListener('click', (e) => {
+    // In arrow mode, don't stop propagation — let the SVG handler place the arrow
+    if (currentTool === 'arrow') return;
     e.stopPropagation();
     selectElement(ellipse, 'ellipse');
   });
@@ -381,6 +484,7 @@ function createOval(x, y) {
       ellipse.setAttribute('cx', startCx + dx);
       ellipse.setAttribute('cy', startCy + dy);
       showEllipseHandles(ellipse);
+      updateAnchoredArrows(ellipse);
     }
 
     function onUp() {
@@ -409,9 +513,18 @@ function createOval(x, y) {
 
 // ── Create arrow (line) ─────────────────────────────────
 
-function createArrow(x1, y1, x2, y2) {
+function createArrow(x1, y1, x2, y2, startAnchor, endAnchor) {
   const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   group.style.cursor = 'pointer';
+  group._anchors = [];
+
+  // Store anchor references if provided
+  if (startAnchor) {
+    group._anchors.push({ end: 'start', ellipse: startAnchor });
+  }
+  if (endAnchor) {
+    group._anchors.push({ end: 'end', ellipse: endAnchor });
+  }
 
   // Invisible wide line for easy clicking (14px hit target)
   const hitLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -443,6 +556,8 @@ function createArrow(x1, y1, x2, y2) {
 
   // Click on arrow → select it
   group.addEventListener('click', (e) => {
+    // In arrow mode, don't stop propagation — let the SVG handler place the arrow
+    if (currentTool === 'arrow') return;
     e.stopPropagation();
     selectElement(group, 'arrow');
   });
@@ -452,6 +567,11 @@ function createArrow(x1, y1, x2, y2) {
     if (selected !== group || selectedType !== 'arrow') return;
     e.stopPropagation();
     e.preventDefault();
+
+    // Detach all anchors when dragging the whole arrow
+    if (group._anchors) {
+      group._anchors = [];
+    }
 
     const startPos = getPos(e);
     const { x1, y1, x2, y2 } = lineAttrs(group);
@@ -505,6 +625,7 @@ function cancelArrowPlacement() {
     arrowPreviewDot = null;
   }
   arrowStart = null;
+  arrowStartAnchor = null;
 }
 
 function updateArrowPreview(pos) {
@@ -542,13 +663,16 @@ function preventClick(e) {
   e.preventDefault();
 }
 
-// ── SVG background click ─────────────────────────────────
+// ── SVG background click ─────────────────────────────────────
 
 svg.addEventListener('click', (e) => {
-  // Only handle clicks directly on the svg or the background rect
-  if (e.target !== svg && e.target !== bgRect) return;
-
   const pos = getPos(e);
+
+  // For 'select' and 'oval', only handle background clicks
+  // For 'arrow', allow clicks on any element (ovals, etc.)
+  if (currentTool !== 'arrow') {
+    if (e.target !== svg && e.target !== bgRect) return;
+  }
 
   switch (currentTool) {
     case 'select':
@@ -564,13 +688,35 @@ svg.addEventListener('click', (e) => {
 
     case 'arrow':
       if (!arrowStart) {
-        // First click: set start point
+        // First click: detect if on an oval
+        const ovalAtStart = findOvalAt(pos);
         arrowStart = pos;
+        arrowStartAnchor = ovalAtStart;
         showArrowStartDot(pos);
         INFO.textContent = 'Click again to place the arrow end point';
       } else {
-        // Second click: create the arrow
-        createArrow(arrowStart.x, arrowStart.y, pos.x, pos.y);
+        // Second click: detect if on an oval, compute edge points
+        const endAnchor = findOvalAt(pos);
+
+        // Compute actual start position (may be on oval edge)
+        let sx = arrowStart.x, sy = arrowStart.y;
+        if (arrowStartAnchor) {
+          const { cx, cy, rx, ry } = ellipseAttrs(arrowStartAnchor);
+          // Reference: toward the end click position
+          const ref = endAnchor ? getEllipseEdgePoint(...Object.values(ellipseAttrs(endAnchor)), pos.x, pos.y) : pos;
+          const edge = getEllipseEdgePoint(cx, cy, rx, ry, ref.x, ref.y);
+          sx = edge.x; sy = edge.y;
+        }
+
+        // Compute actual end position (may be on oval edge)
+        let ex = pos.x, ey = pos.y;
+        if (endAnchor) {
+          const { cx, cy, rx, ry } = ellipseAttrs(endAnchor);
+          const edge = getEllipseEdgePoint(cx, cy, rx, ry, sx, sy);
+          ex = edge.x; ey = edge.y;
+        }
+
+        createArrow(sx, sy, ex, ey, arrowStartAnchor, endAnchor);
         cancelArrowPlacement();
         updateLegend();
         INFO.textContent = 'Click to set the arrow start point';
