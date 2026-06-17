@@ -85,6 +85,11 @@ svg.addEventListener('click', (e) => {
 
   switch (currentTool) {
     case 'select':
+      // If a selection box drag just happened, skip (handled by mouseup)
+      if (_selBoxDragged) {
+        _selBoxDragged = false;
+        break;
+      }
       // Just deselect — clicking the background clears selection
       deselect();
       break;
@@ -146,6 +151,113 @@ svg.addEventListener('mousemove', (e) => {
 
   const pos = getPos(e);
   updateArrowPreview(pos);
+});
+
+// ── Selection box (marquee select) ─────────────────────
+
+let _selBoxStart = null;
+let _selBoxRect = null;
+let _selBoxDragged = false;
+
+function getElementsInRect(x, y, w, h) {
+  const right = x + w;
+  const bottom = y + h;
+  const found = [];
+
+  // Check ellipses by center point
+  svg.querySelectorAll('ellipse').forEach(el => {
+    const cx = parseFloat(el.getAttribute('cx'));
+    const cy = parseFloat(el.getAttribute('cy'));
+    if (cx >= x && cx <= right && cy >= y && cy <= bottom) {
+      found.push({ el, type: 'ellipse' });
+    }
+  });
+
+  // Check arrow groups by endpoint
+  svg.querySelectorAll('g').forEach(el => {
+    if (!el._visPath) return;
+    const x1 = el._x1, y1 = el._y1, x2 = el._x2, y2 = el._y2;
+    if ((x1 >= x && x1 <= right && y1 >= y && y1 <= bottom) ||
+        (x2 >= x && x2 <= right && y2 >= y && y2 <= bottom)) {
+      found.push({ el, type: 'arrow' });
+    }
+  });
+
+  return found;
+}
+
+svg.addEventListener('mousedown', (e) => {
+  if (currentTool !== 'select') return;
+  // Only on background, left button
+  if (e.target !== svg && e.target !== bgRect) return;
+  if (e.button !== 0) return;
+
+  const startPos = getPos(e);
+  _selBoxStart = startPos;
+  _selBoxDragged = false;
+
+  // Create the visible selection rectangle
+  const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  rect.setAttribute('x', startPos.x);
+  rect.setAttribute('y', startPos.y);
+  rect.setAttribute('width', 0);
+  rect.setAttribute('height', 0);
+  rect.setAttribute('fill', 'rgba(59, 130, 246, 0.15)');
+  rect.setAttribute('stroke', '#3b82f6');
+  rect.setAttribute('stroke-width', '1.5');
+  rect.setAttribute('stroke-dasharray', '5,3');
+  rect.setAttribute('pointer-events', 'none');
+  svg.appendChild(rect);
+  _selBoxRect = rect;
+
+  function onMove(me) {
+    const pos = getPos(me);
+    const x = Math.min(_selBoxStart.x, pos.x);
+    const y = Math.min(_selBoxStart.y, pos.y);
+    const w = Math.abs(pos.x - _selBoxStart.x);
+    const h = Math.abs(pos.y - _selBoxStart.y);
+
+    if (w > 3 || h > 3) {
+      _selBoxDragged = true;
+    }
+
+    _selBoxRect.setAttribute('x', x);
+    _selBoxRect.setAttribute('y', y);
+    _selBoxRect.setAttribute('width', w);
+    _selBoxRect.setAttribute('height', h);
+  }
+
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+
+    const finalRect = _selBoxRect;
+    if (finalRect) {
+      const x = parseFloat(finalRect.getAttribute('x'));
+      const y = parseFloat(finalRect.getAttribute('y'));
+      const w = parseFloat(finalRect.getAttribute('width'));
+      const h = parseFloat(finalRect.getAttribute('height'));
+
+      finalRect.remove();
+      _selBoxRect = null;
+
+      if (_selBoxDragged && w > 3 && h > 3) {
+        deselect();
+        const inRect = getElementsInRect(x, y, w, h);
+        for (const { el, type } of inRect) {
+          selectElement(el, type, true);
+        }
+        if (inRect.length > 0) {
+          INFO.textContent = `Selected ${inRect.length} element${inRect.length > 1 ? 's' : ''}`;
+        }
+      }
+    }
+
+    _selBoxStart = null;
+  }
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
 });
 
 // ── Clipboard (in-memory) ────────────────────────────────
