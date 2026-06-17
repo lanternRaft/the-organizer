@@ -143,9 +143,16 @@ export function createShape(x, y) {
     selectElement(ellipse, 'ellipse', e.shiftKey);
   });
 
-  // Mousedown on a selected shape → drag to move it
+  // Mousedown on a shape → select it (if not already) and drag immediately
   ellipse.addEventListener('mousedown', (e) => {
-    if (!selectedSet.has(ellipse) || selectedTypes.get(ellipse) !== 'ellipse') return;
+    // If not already selected, select it first (skip for Shift+click; let click handler handle toggling)
+    if (!selectedSet.has(ellipse)) {
+      if (e.shiftKey) return;
+      selectElement(ellipse, 'ellipse', false);
+      // Prevent the click event from also trying to select
+      ellipse.addEventListener('click', preventClick, { once: true });
+    }
+    if (selectedTypes.get(ellipse) !== 'ellipse') return;
 
     // Multi-drag: move all selected elements together
     if (selectedSet.size > 1) {

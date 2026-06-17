@@ -133,9 +133,16 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
     selectElement(group, 'arrow', e.shiftKey);
   });
 
-  // Mousedown on a selected arrow → drag to move it
+  // Mousedown on an arrow → select it (if not already) and drag immediately
   group.addEventListener('mousedown', (e) => {
-    if (!selectedSet.has(group) || selectedTypes.get(group) !== 'arrow') return;
+    // If not already selected, select it first (skip for Shift+click; let click handler handle toggling)
+    if (!selectedSet.has(group)) {
+      if (e.shiftKey) return;
+      selectElement(group, 'arrow', false);
+      // Prevent the click event from also trying to select
+      group.addEventListener('click', preventClick, { once: true });
+    }
+    if (selectedTypes.get(group) !== 'arrow') return;
     e.stopPropagation();
     e.preventDefault();
 
