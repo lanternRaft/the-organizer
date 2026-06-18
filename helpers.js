@@ -194,7 +194,7 @@ const _anchorDots = new Map(); // ellipse -> [{label, el}]
 
 const ARROWHEAD_WIDTH = 9.6;
 const ARROWHEAD_HEIGHT = 6.4;
-const ARROWHEAD_ANCHOR_EXT = 40; // straight-line extension from anchor edge (shrunk to leave room for marker tip)
+const ARROWHEAD_ANCHOR_EXT = 15; // straight-line extension from anchor edge (shrunk to leave room for marker tip)
 
 /**
  * Get the 4 cardinal anchor points for an ellipse at the ellipse edge.

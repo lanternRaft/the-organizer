@@ -71,8 +71,8 @@ SVG `<g>` groups containing two `<path>` children: `_visPath` (visible stroke) a
 - **Waypoint-based data model**: `group._points` is an array of `{x, y}` waypoints (minimum 2)
 - **Legacy compat**: `group._x1, _y1, _x2, _y2` kept in sync with first/last waypoints
 - **Legacy offset**: `group._offset` kept for clipboard backward compatibility
-- **Path computation**: Cubic bezier curves using **Catmull-Rom tangents** for C1 continuity through every waypoint, combined with `ARROWHEAD_ANCHOR_EXT=40px` straight extensions from anchors. The path draws to the exact ellipse edge; the end-marker tip (at `refX=ARROWHEAD_WIDTH`) is placed at that endpoint so there is zero gap between the arrowhead tip and the shape.
-  - Anchored endpoints: the arrow extends 40px straight out from each anchor before curving. The cardinal direction of the anchor is used as the tangent at that node.
+- **Path computation**: Cubic bezier curves using **Catmull-Rom tangents** for C1 continuity through every waypoint, combined with `ARROWHEAD_ANCHOR_EXT=15px` straight extensions from anchors. The path draws to the exact ellipse edge; the end-marker tip (at `refX=ARROWHEAD_WIDTH`) is placed at that endpoint so there is zero gap between the arrowhead tip and the shape.
+  - Anchored endpoints: the arrow extends 15px straight out from each anchor before curving. The cardinal direction of the anchor is used as the tangent at that node.
   - Intermediate waypoints: the tangent at node *i* is `normalize(nodes[i+1] − nodes[i−1])` (Catmull-Rom). Both the outgoing control point of segment *i→i+1* and the incoming control point of *i−1→i* align with this same tangent, guaranteeing smooth curves with no kinks.
   - Control-point reach: `clamp(segLen × 0.35, 30, 100)` px along the tangent direction.
 - **Direction** (controlled via selection menu buttons):
