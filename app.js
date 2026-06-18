@@ -607,3 +607,136 @@ document.addEventListener('keydown', (e) => {
     hideConfirmDialog();
   }
 });
+
+// ── Export to PNG ─────────────────────────────────────────
+
+const exportPngBtn = document.getElementById('menu-export-png-btn');
+
+function exportToPNG() {
+  // Close the menu
+  menuDropdown.classList.remove('show');
+
+  // Get the SVG's current rendered dimensions
+  const rect = svg.getBoundingClientRect();
+  const width = Math.round(rect.width);
+  const height = Math.round(rect.height);
+
+  // ── Prepare a standalone SVG for export ─────────────────
+  const exportSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  exportSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  exportSvg.setAttribute('width', width);
+  exportSvg.setAttribute('height', height);
+  exportSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+  // Include CSS styles inline so the exported SVG renders standalone
+  const styleText = `
+    text { font-family: sans-serif; user-select: none; }
+    .anchor-point { display: none; }
+  `;
+  const styleEl = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+  styleEl.textContent = styleText;
+  exportSvg.appendChild(styleEl);
+
+  // Background rect matching the current theme's background color
+  const bodyBg = getComputedStyle(document.body).backgroundColor;
+  const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  bgRect.setAttribute('width', '100%');
+  bgRect.setAttribute('height', '100%');
+  bgRect.setAttribute('fill', bodyBg);
+  exportSvg.appendChild(bgRect);
+
+  // ── Grid (if enabled) ───────────────────────────────────
+  if (document.body.classList.contains('grid-enabled')) {
+    const gridDefs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    const pattern = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
+    pattern.setAttribute('id', 'export-grid');
+    pattern.setAttribute('width', '40');
+    pattern.setAttribute('height', '40');
+    pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+    const gridLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    gridLine.setAttribute('d', 'M 40 0 L 0 0 0 40');
+    gridLine.setAttribute('fill', 'none');
+    // Match the grid line color from CSS
+    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+    gridLine.setAttribute('stroke', isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.07)');
+    gridLine.setAttribute('stroke-width', '1');
+    pattern.appendChild(gridLine);
+    gridDefs.appendChild(pattern);
+    exportSvg.appendChild(gridDefs);
+
+    const gridRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    gridRect.setAttribute('width', '100%');
+    gridRect.setAttribute('height', '100%');
+    gridRect.setAttribute('fill', 'url(#export-grid)');
+    exportSvg.appendChild(gridRect);
+  }
+
+  // ── Clone visible SVG children (skip defs / anchor dots) ──
+  const originalChildren = svg.children;
+  for (let i = 0; i < originalChildren.length; i++) {
+    const child = originalChildren[i];
+    if (child.tagName === 'defs') {
+      // Clone defs and all its children (arrowhead markers)
+      const defsClone = child.cloneNode(true);
+      exportSvg.appendChild(defsClone);
+      continue;
+    }
+    if (child.classList && child.classList.contains('anchor-point')) continue;
+
+    const clone = child.cloneNode(true);
+    // Remove any _ignoreNextClick property artifacts (they're JS props, not attributes)
+    exportSvg.appendChild(clone);
+  }
+
+  // ── Serialize to string and create a Blob URL ────────────
+  const serializer = new XMLSerializer();
+  const svgString = serializer.serializeToString(exportSvg);
+  const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(svgBlob);
+
+  INFO.textContent = 'Rendering PNG…';
+
+  // ── Render SVG onto a Canvas, then export as PNG ─────────
+  const img = new Image();
+  img.onload = () => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = width * 2;  // 2x for retina-quality export
+      canvas.height = height * 2;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(2, 2);
+      ctx.drawImage(img, 0, 0, width, height);
+
+      const pngDataUrl = canvas.toDataURL('image/png');
+
+      // Trigger download
+      const link = document.createElement('a');
+      const now = new Date();
+      const dateStr = now.toISOString().slice(0, 10);
+      link.download = `the-organizer-${dateStr}.png`;
+      link.href = pngDataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      INFO.textContent = 'PNG exported';
+    } catch (e) {
+      console.warn('PNG export failed:', e);
+      INFO.textContent = 'PNG export failed';
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    INFO.textContent = 'PNG export failed — could not render SVG';
+  };
+
+  img.src = url;
+}
+
+exportPngBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  exportToPNG();
+});

@@ -327,6 +327,7 @@ A hamburger button (`#menu-btn`) in the top-left corner toggles a dropdown (`#me
 
 | Item | Action |
 |---|---|
+| **Export PNG** | Exports the canvas as a PNG image (downloads as `the-organizer-YYYY-MM-DD.png`) |
 | **Clear** | Opens the confirmation dialog to clear the canvas |
 
 The dropdown closes on outside click and on `contextmenu`.
