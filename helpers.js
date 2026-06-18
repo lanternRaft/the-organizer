@@ -613,6 +613,7 @@ export function startMultiDrag(e) {
     const dx = pos.x - startPos.x;
     const dy = pos.y - startPos.y;
 
+    // First pass: move all ellipses/nodes
     for (const snap of snapshots) {
       if (snap.type === 'ellipse' || snap.type === 'node') {
         snap.el.setAttribute('cx', snap.cx + dx);
@@ -620,17 +621,33 @@ export function startMultiDrag(e) {
         if (snap.type === 'ellipse') {
           updateOvalTextPosition(snap.el);
         }
-      } else if (snap.type === 'arrow') {
-        setArrowAttrs(snap.el, {
-          x1: snap.x1 + dx,
-          y1: snap.y1 + dy,
-          x2: snap.x2 + dx,
-          y2: snap.y2 + dy,
-        });
       }
     }
 
-    // Update anchored arrows and visual anchors after all elements are moved
+    // Second pass: update anchored arrows so their endpoints follow moved nodes,
+    // then move unanchored arrows (free arrows not connected to any node)
+    for (const snap of snapshots) {
+      if (snap.type === 'arrow') {
+        if (snap.el._anchors && snap.el._anchors.length > 0) {
+          // Anchored arrow: let updateAnchoredArrows handle endpoint positions
+          for (const anchor of snap.el._anchors) {
+            if (anchor.ellipse && anchor.ellipse.parentNode) {
+              updateAnchoredArrows(anchor.ellipse);
+            }
+          }
+        } else {
+          // Free-floating arrow: move as a whole
+          setArrowAttrs(snap.el, {
+            x1: snap.x1 + dx,
+            y1: snap.y1 + dy,
+            x2: snap.x2 + dx,
+            y2: snap.y2 + dy,
+          });
+        }
+      }
+    }
+
+    // Update visual anchors after all elements are moved
     for (const snap of snapshots) {
       if (snap.type === 'ellipse' || snap.type === 'node') {
         updateAnchoredArrows(snap.el);

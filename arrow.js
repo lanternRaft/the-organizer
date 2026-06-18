@@ -4,7 +4,8 @@ import { svg, INFO, defs, selected, selectedType, currentTool, selectedSet, sele
 import {
   getPos, findOvalAt, ellipseAttrs, lineAttrs,
   getEllipseEdgePoint, updateArrowPath, setArrowAttrs,
-  calculateSignedOffset, startMultiDrag, applyArrowDirection
+  calculateSignedOffset, updateAnchoredArrows,
+  startMultiDrag, applyArrowDirection
 } from './helpers.js';
 import { selectElement, showLineHandles, updateLegend, hideContextMenu } from './select.js';
 
@@ -179,11 +180,6 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
       return;
     }
 
-    // Detach all anchors when dragging the whole arrow
-    if (group._anchors) {
-      group._anchors = [];
-    }
-
     const startPos = getPos(e);
     const { x1, y1, x2, y2 } = lineAttrs(group);
     let dragged = false;
@@ -194,10 +190,24 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
       const pos = getPos(me);
       const dx = pos.x - startPos.x;
       const dy = pos.y - startPos.y;
+      // Move both endpoints by the drag delta
       setArrowAttrs(group, {
         x1: x1 + dx, y1: y1 + dy,
         x2: x2 + dx, y2: y2 + dy,
       });
+      // Re-snap anchored endpoints back to their connected nodes
+      // so the arrow stays attached at both ends
+      if (group._anchors && group._anchors.length > 0) {
+        for (const anchor of group._anchors) {
+          if (anchor.ellipse && anchor.ellipse.parentNode) {
+            updateAnchoredArrows(anchor.ellipse);
+          }
+        }
+        // Refresh the offset so the curve avoids shape bodies
+        const { x1: nx1, y1: ny1, x2: nx2, y2: ny2 } = lineAttrs(group);
+        group._offset = calculateSignedOffset(nx1, ny1, nx2, ny2, group._anchors);
+        updateArrowPath(group);
+      }
       showLineHandles(group);
     }
 
