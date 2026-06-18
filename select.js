@@ -41,7 +41,7 @@ export function selectElement(el, type, additive = false) {
       // Remove from selection
       selectedSet.delete(el);
       selectedTypes.delete(el);
-      if (type === 'ellipse') {
+      if (type === 'ellipse' || type === 'node') {
         el.setAttribute('stroke', darkenColor(el.getAttribute('fill'), 40));
         el.setAttribute('stroke-width', '2');
       } else if (type === 'arrow') {
@@ -62,7 +62,7 @@ export function selectElement(el, type, additive = false) {
       selectedSet.add(el);
       selectedTypes.set(el, type);
       setSelected(el, type);
-      if (type === 'ellipse') {
+      if (type === 'ellipse' || type === 'node') {
         el.setAttribute('stroke', lightenColor(el.getAttribute('fill'), 40));
         el.setAttribute('stroke-width', '3');
       } else if (type === 'arrow') {
@@ -76,6 +76,7 @@ export function selectElement(el, type, additive = false) {
       const sole = selectedSet.values().next().value;
       const soleType = selectedTypes.get(sole);
       if (soleType === 'ellipse') showEllipseHandles(sole);
+      else if (soleType === 'node') removeHandles(); // nodes have no resize handles
       else if (soleType === 'arrow') showLineHandles(sole);
     }
     updateAnchorVisibility();
@@ -88,11 +89,17 @@ export function selectElement(el, type, additive = false) {
     selectedSet.add(el);
     selectedTypes.set(el, type);
 
-    if (type === 'ellipse') {
+    if (type === 'ellipse' || type === 'node') {
       el.setAttribute('stroke', lightenColor(el.getAttribute('fill'), 40));
       el.setAttribute('stroke-width', '3');
-      showEllipseHandles(el);
-      INFO.textContent = 'Drag a corner handle to resize, or drag the oval to move it';
+      if (type === 'ellipse') {
+        showEllipseHandles(el);
+        INFO.textContent = 'Drag a corner handle to resize, or drag the oval to move it';
+      } else {
+        // Node: no resize handles
+        removeHandles();
+        INFO.textContent = 'Drag the node to move it';
+      }
     } else if (type === 'arrow') {
       el._visPath.setAttribute('stroke', '#fbbf24');
       el._visPath.setAttribute('stroke-width', '3');
@@ -121,7 +128,7 @@ export function deselect() {
   // Remove visual selection from all selected elements
   for (const el of selectedSet) {
     const type = selectedTypes.get(el);
-    if (type === 'ellipse') {
+    if (type === 'ellipse' || type === 'node') {
       el.setAttribute('stroke', darkenColor(el.getAttribute('fill'), 40));
       el.setAttribute('stroke-width', '2');
     } else if (type === 'arrow') {
@@ -146,6 +153,9 @@ export function deselect() {
       INFO.textContent = shapeMode === 'circle'
         ? 'Click the canvas to place a circle'
         : 'Click the canvas to place an oval';
+      break;
+    case 'node':
+      INFO.textContent = 'Click the canvas to place a node';
       break;
     case 'arrow':
       INFO.textContent = 'Click to set the arrow start point';
@@ -231,7 +241,7 @@ function applyColor(color) {
   const affected = [...selectedSet];
   for (const el of affected) {
     const elType = selectedTypes.get(el);
-    if (elType === 'ellipse') {
+    if (elType === 'ellipse' || elType === 'node') {
       el.setAttribute('fill', color);
       // Update stroke to match the new fill color
       if (selectedSet.has(el)) {
@@ -258,6 +268,13 @@ function deleteSelected() {
     const elType = selectedTypes.get(el);
     if (elType === 'ellipse') {
       removeOvalText(el);
+      const arrows = svg.querySelectorAll('g');
+      arrows.forEach((group) => {
+        if (group._anchors) {
+          group._anchors = group._anchors.filter(a => a.ellipse !== el);
+        }
+      });
+    } else if (elType === 'node') {
       const arrows = svg.querySelectorAll('g');
       arrows.forEach((group) => {
         if (group._anchors) {
@@ -576,12 +593,14 @@ function getElementsInRect(x, y, w, h) {
   const bottom = y + h;
   const found = [];
 
-  // Check ellipses by center point
+  // Check ellipses (ovals + nodes) by center point
   svg.querySelectorAll('ellipse').forEach(el => {
     const cx = parseFloat(el.getAttribute('cx'));
     const cy = parseFloat(el.getAttribute('cy'));
     if (cx >= x && cx <= right && cy >= y && cy <= bottom) {
-      found.push({ el, type: 'ellipse' });
+      const rx = parseFloat(el.getAttribute('rx'));
+      const type = rx <= 10 ? 'node' : 'ellipse';
+      found.push({ el, type });
     }
   });
 

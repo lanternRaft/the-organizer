@@ -4,6 +4,7 @@ import { svg, bgRect, INFO, defs, currentTool, selected, selectedType, selectedS
 import { getPos, findOvalAt, findAnchorNear, getAnchorPoints, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText, showAnchors, hideAnchors, updateAnchors, wasMultiDragged, wasDragHappened, darkenColor, lightenColor } from './helpers.js';
 import { deselect, selectElement, updateLegend, hideContextMenu, wasSelBoxDragged } from './select.js';
 import { createShape, showTextInput, hideTextInput } from './shape.js';
+import { createNode, NODE_RADIUS } from './node.js';
 import {
   createArrow, cancelArrowPlacement,
   updateArrowPreview, showArrowStartDot,
@@ -121,6 +122,10 @@ toolBtns.forEach(btn => {
         hideAnchors();
         INFO.textContent = 'Click the canvas to place an oval';
         break;
+      case 'node':
+        hideAnchors();
+        INFO.textContent = 'Click the canvas to place a node';
+        break;
       case 'arrow':
         showAnchors();
         INFO.textContent = 'Click to set the arrow start point';
@@ -192,6 +197,13 @@ svg.addEventListener('click', (e) => {
     case 'shape':
       deselect();
       createShape(pos.x, pos.y);
+      updateLegend();
+      switchToSelectTool();
+      break;
+
+    case 'node':
+      deselect();
+      createNode(pos.x, pos.y);
       updateLegend();
       switchToSelectTool();
       break;
@@ -286,6 +298,13 @@ function copyToClipboard() {
         offset: el._offset || 0,
         color: el._visPath.getAttribute('stroke'),
       });
+    } else if (type === 'node') {
+      _clipboard.push({
+        type: 'node',
+        cx: parseFloat(el.getAttribute('cx')),
+        cy: parseFloat(el.getAttribute('cy')),
+        fill: el.getAttribute('fill'),
+      });
     }
   }
 }
@@ -322,13 +341,22 @@ function pasteFromClipboard() {
         updateArrowMarker(el._visPath, data.color);
       }
       newElements.push(el);
+    } else if (data.type === 'node') {
+      const el = createNode(data.cx + offset, data.cy + offset);
+      if (data.fill) {
+        el.setAttribute('fill', data.fill);
+        el.setAttribute('stroke', darkenColor(data.fill, 40));
+      }
+      newElements.push(el);
     }
   }
 
   // Select all pasted elements
   deselect();
   for (const el of newElements) {
-    const type = el.tagName === 'ellipse' ? 'ellipse' : 'arrow';
+    const type = el.tagName === 'ellipse'
+      ? (parseFloat(el.getAttribute('rx')) <= NODE_RADIUS + 2 ? 'node' : 'ellipse')
+      : 'arrow';
     selectElement(el, type, true);
   }
 
@@ -377,7 +405,9 @@ document.addEventListener('keydown', (e) => {
     if (all.length === 0) return;
     deselect();
     for (const el of all) {
-      const type = el.tagName === 'ellipse' ? 'ellipse' : 'arrow';
+      const type = el.tagName === 'ellipse'
+        ? (parseFloat(el.getAttribute('rx')) <= NODE_RADIUS + 2 ? 'node' : 'ellipse')
+        : 'arrow';
       selectElement(el, type, true);
     }
     INFO.textContent = `Selected ${selectedSet.size} elements`;
@@ -398,6 +428,13 @@ document.addEventListener('keydown', (e) => {
       const elType = selectedTypes.get(el);
       if (elType === 'ellipse') {
         removeOvalText(el);
+        const arrows = svg.querySelectorAll('g');
+        arrows.forEach((group) => {
+          if (group._anchors) {
+            group._anchors = group._anchors.filter(a => a.ellipse !== el);
+          }
+        });
+      } else if (elType === 'node') {
         const arrows = svg.querySelectorAll('g');
         arrows.forEach((group) => {
           if (group._anchors) {

@@ -540,10 +540,10 @@ export function startMultiDrag(e) {
 
   for (const el of selectedSet) {
     const type = selectedTypes.get(el);
-    if (type === 'ellipse') {
+    if (type === 'ellipse' || type === 'node') {
       snapshots.push({
         el,
-        type: 'ellipse',
+        type,
         cx: parseFloat(el.getAttribute('cx')),
         cy: parseFloat(el.getAttribute('cy')),
       });
@@ -568,10 +568,12 @@ export function startMultiDrag(e) {
     const dy = pos.y - startPos.y;
 
     for (const snap of snapshots) {
-      if (snap.type === 'ellipse') {
+      if (snap.type === 'ellipse' || snap.type === 'node') {
         snap.el.setAttribute('cx', snap.cx + dx);
         snap.el.setAttribute('cy', snap.cy + dy);
-        updateOvalTextPosition(snap.el);
+        if (snap.type === 'ellipse') {
+          updateOvalTextPosition(snap.el);
+        }
       } else if (snap.type === 'arrow') {
         setArrowAttrs(snap.el, {
           x1: snap.x1 + dx,
@@ -584,7 +586,7 @@ export function startMultiDrag(e) {
 
     // Update anchored arrows and visual anchors after all elements are moved
     for (const snap of snapshots) {
-      if (snap.type === 'ellipse') {
+      if (snap.type === 'ellipse' || snap.type === 'node') {
         updateAnchoredArrows(snap.el);
       }
     }
