@@ -104,7 +104,7 @@ export function selectElement(el, type, additive = false) {
       el._visPath.setAttribute('stroke', '#fbbf24');
       el._visPath.setAttribute('stroke-width', '3');
       showLineHandles(el);
-      INFO.textContent = 'Drag an endpoint handle to change the arrow length; drag the midpoint handle to curve it';
+      INFO.textContent = 'Drag handles to move; Shift+click the path to add curve points';
     }
     updateAnchorVisibility();
   }
@@ -436,101 +436,185 @@ export function showEllipseHandles(el) {
 
 export function showLineHandles(el) {
   removeHandles();
-  const { x1, y1, x2, y2 } = lineAttrs(el);
-  const offset = el._offset || 0;
 
-  // Handle at start point
-  createHandle(x1, y1, 'grab', (pos) => {
-    // Detach start anchor when manually moved
-    if (el._anchors) {
-      el._anchors = el._anchors.filter(a => a.end !== 'start');
-    }
-    setArrowAttrs(el, { x1: pos.x, y1: pos.y });
-    showLineHandles(el);
-  }, () => {
-    // On drag end: snap to nearest anchor within 15px
+  const points = el._points;
+  if (!points || points.length < 2) {
+    // Legacy fallback: use old endpoint + midpoint handles
     const { x1, y1, x2, y2 } = lineAttrs(el);
-    const snapped = findAnchorNear({ x: x1, y: y1 });
-    if (snapped) {
-      if (!el._anchors) el._anchors = [];
-      el._anchors = el._anchors.filter(a => a.end !== 'start');
-      el._anchors.push({ end: 'start', ellipse: snapped.ellipse, anchorLabel: snapped.anchorLabel });
-      setArrowAttrs(el, { x1: snapped.anchorPos.x, y1: snapped.anchorPos.y });
-      // Recompute offset sign to avoid the shape
-      const { x1: nx1, y1: ny1, x2: nx2, y2: ny2 } = lineAttrs(el);
-      el._offset = calculateSignedOffset(nx1, ny1, nx2, ny2, el._anchors);
-      updateArrowPath(el);
+    const offset = el._offset || 0;
+
+    createHandle(x1, y1, 'grab', (pos) => {
+      if (el._anchors) el._anchors = el._anchors.filter(a => a.end !== 'start');
+      setArrowAttrs(el, { x1: pos.x, y1: pos.y });
       showLineHandles(el);
-    }
-  });
+    }, () => {
+      const { x1, y1, x2, y2 } = lineAttrs(el);
+      const snapped = findAnchorNear({ x: x1, y: y1 });
+      if (snapped) {
+        if (!el._anchors) el._anchors = [];
+        el._anchors = el._anchors.filter(a => a.end !== 'start');
+        el._anchors.push({ end: 'start', ellipse: snapped.ellipse, anchorLabel: snapped.anchorLabel });
+        setArrowAttrs(el, { x1: snapped.anchorPos.x, y1: snapped.anchorPos.y });
+        const { x1: nx1, y1: ny1, x2: nx2, y2: ny2 } = lineAttrs(el);
+        el._offset = calculateSignedOffset(nx1, ny1, nx2, ny2, el._anchors);
+        updateArrowPath(el);
+        showLineHandles(el);
+      }
+    });
 
-  // Handle at end point
-  createHandle(x2, y2, 'grab', (pos) => {
-    // Detach end anchor when manually moved
-    if (el._anchors) {
-      el._anchors = el._anchors.filter(a => a.end !== 'end');
-    }
-    setArrowAttrs(el, { x2: pos.x, y2: pos.y });
-    showLineHandles(el);
-  }, () => {
-    // On drag end: snap to nearest anchor within 15px
-    const { x1, y1, x2, y2 } = lineAttrs(el);
-    const snapped = findAnchorNear({ x: x2, y: y2 });
-    if (snapped) {
-      if (!el._anchors) el._anchors = [];
-      el._anchors = el._anchors.filter(a => a.end !== 'end');
-      el._anchors.push({ end: 'end', ellipse: snapped.ellipse, anchorLabel: snapped.anchorLabel });
-      setArrowAttrs(el, { x2: snapped.anchorPos.x, y2: snapped.anchorPos.y });
-      // Recompute offset sign to avoid the shape
-      const { x1: nx1, y1: ny1, x2: nx2, y2: ny2 } = lineAttrs(el);
-      el._offset = calculateSignedOffset(nx1, ny1, nx2, ny2, el._anchors);
-      updateArrowPath(el);
+    createHandle(x2, y2, 'grab', (pos) => {
+      if (el._anchors) el._anchors = el._anchors.filter(a => a.end !== 'end');
+      setArrowAttrs(el, { x2: pos.x, y2: pos.y });
       showLineHandles(el);
+    }, () => {
+      const { x1, y1, x2, y2 } = lineAttrs(el);
+      const snapped = findAnchorNear({ x: x2, y: y2 });
+      if (snapped) {
+        if (!el._anchors) el._anchors = [];
+        el._anchors = el._anchors.filter(a => a.end !== 'end');
+        el._anchors.push({ end: 'end', ellipse: snapped.ellipse, anchorLabel: snapped.anchorLabel });
+        setArrowAttrs(el, { x2: snapped.anchorPos.x, y2: snapped.anchorPos.y });
+        const { x1: nx1, y1: ny1, x2: nx2, y2: ny2 } = lineAttrs(el);
+        el._offset = calculateSignedOffset(nx1, ny1, nx2, ny2, el._anchors);
+        updateArrowPath(el);
+        showLineHandles(el);
+      }
+    });
+
+    // Midpoint circle handle for legacy offset-based curving
+    const mid = getArrowMidpoint(x1, y1, x2, y2, offset);
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', mid.x);
+    circle.setAttribute('cy', mid.y);
+    circle.setAttribute('r', HANDLE_SIZE / 2);
+    circle.setAttribute('fill', '#ffffff');
+    circle.setAttribute('stroke', '#3b82f6');
+    circle.setAttribute('stroke-width', '2');
+    circle.setAttribute('cursor', 'grab');
+    circle.classList.add('resize-handle');
+    svg.appendChild(circle);
+    const circleData = { el: circle };
+    handles.push(circleData);
+    circle.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (!selected) return;
+      function onMove(me) {
+        const pos = getPos(me);
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len < 1) return;
+        const cross = dx * (pos.y - y1) - dy * (pos.x - x1);
+        el._offset = cross / len;
+        updateArrowPath(el);
+        showLineHandles(el);
+      }
+      function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    return;
+  }
+
+  // ── Waypoint-based handles ─────────────────────────────
+  const startAnchor = el._anchors?.find(a => a.end === 'start');
+  const endAnchor = el._anchors?.find(a => a.end === 'end');
+
+  for (let i = 0; i < points.length; i++) {
+    const pt = points[i];
+    const isFirst = i === 0;
+    const isLast = i === points.length - 1;
+    const isEndHandle = isFirst || isLast;
+
+    // Endpoint handles are squares; intermediate waypoints are circles
+    if (isEndHandle) {
+      createHandle(pt.x, pt.y, 'grab', (pos) => {
+        // Detach the relevant anchor when manually moved
+        if (el._anchors) {
+          el._anchors = el._anchors.filter(a =>
+            (isFirst && a.end === 'start') || (isLast && a.end === 'end') ? false : true
+          );
+        }
+        pt.x = pos.x;
+        pt.y = pos.y;
+        setArrowAttrs(el, {
+          [isFirst ? 'x1' : 'x2']: pos.x,
+          [isFirst ? 'y1' : 'y2']: pos.y,
+        });
+        showLineHandles(el);
+      }, () => {
+        // On drag end: snap to nearest anchor within 15px
+        const snapped = findAnchorNear({ x: pt.x, y: pt.y });
+        if (snapped) {
+          if (!el._anchors) el._anchors = [];
+          el._anchors = el._anchors.filter(a =>
+            (isFirst && a.end === 'start') || (isLast && a.end === 'end')
+          );
+          el._anchors.push({
+            end: isFirst ? 'start' : 'end',
+            ellipse: snapped.ellipse,
+            anchorLabel: snapped.anchorLabel,
+          });
+          pt.x = snapped.anchorPos.x;
+          pt.y = snapped.anchorPos.y;
+          setArrowAttrs(el, {
+            [isFirst ? 'x1' : 'x2']: snapped.anchorPos.x,
+            [isFirst ? 'y1' : 'y2']: snapped.anchorPos.y,
+          });
+          updateArrowPath(el);
+          showLineHandles(el);
+        }
+      });
+    } else {
+      // ── Intermediate waypoint handle (circle) ────────────
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', pt.x);
+      circle.setAttribute('cy', pt.y);
+      circle.setAttribute('r', HANDLE_SIZE / 3);
+      circle.setAttribute('fill', '#ffffff');
+      circle.setAttribute('stroke', '#3b82f6');
+      circle.setAttribute('stroke-width', '2');
+      circle.setAttribute('cursor', 'grab');
+      circle.classList.add('resize-handle', 'waypoint-handle');
+      svg.appendChild(circle);
+
+      const data = { el: circle };
+      handles.push(data);
+
+      circle.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (!selected) return;
+        const snapX = pt.x;
+        const snapY = pt.y;
+
+        function onMove(me) {
+          const pos = getPos(me);
+          pt.x = pos.x;
+          pt.y = pos.y;
+          // Keep _x1/_y1/_x2/_y2 in sync
+          el._x1 = points[0].x;
+          el._y1 = points[0].y;
+          el._x2 = points[points.length - 1].x;
+          el._y2 = points[points.length - 1].y;
+          updateArrowPath(el);
+          showLineHandles(el);
+        }
+
+        function onUp() {
+          document.removeEventListener('mousemove', onMove);
+          document.removeEventListener('mouseup', onUp);
+        }
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+      });
     }
-  });
-
-  // ── Midpoint circle handle for curving ──
-  const mid = getArrowMidpoint(x1, y1, x2, y2, offset);
-  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-  circle.setAttribute('cx', mid.x);
-  circle.setAttribute('cy', mid.y);
-  circle.setAttribute('r', HANDLE_SIZE / 2);
-  circle.setAttribute('fill', '#ffffff');
-  circle.setAttribute('stroke', '#3b82f6');
-  circle.setAttribute('stroke-width', '2');
-  circle.setAttribute('cursor', 'grab');
-  circle.classList.add('resize-handle');
-  svg.appendChild(circle);
-
-  const data = { el: circle };
-  handles.push(data);
-
-  circle.addEventListener('mousedown', (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-    if (!selected) return;
-
-    function onMove(me) {
-      const pos = getPos(me);
-      // Calculate signed perpendicular distance from the baseline (x1,y1)-(x2,y2)
-      const dx = x2 - x1;
-      const dy = y2 - y1;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      if (len < 1) return;
-      const cross = dx * (pos.y - y1) - dy * (pos.x - x1);
-      el._offset = cross / len;
-      updateArrowPath(el);
-      showLineHandles(el);
-    }
-
-    function onUp() {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-    }
-
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  });
+  }
 }
 
 // ── Legend ──────────────────────────────────────────────

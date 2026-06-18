@@ -64,8 +64,88 @@ export function getEllipseEdgePoint(cx, cy, rx, ry, fromX, fromY) {
   return { x: cx + dx * t, y: cy + dy * t };
 }
 
-// ── Curve helpers ────────────────────────────────────────
+// ── Curve helpers (Cubic Bézier) ───────────────────────────
 
+/**
+ * Compute control points for a cubic bezier segment.
+ * At anchored endpoints, the control point extends straight AWAY from the
+ * connected shape's center so the arrow exits/enters the node cleanly.
+ * For unanchored endpoints (intermediate waypoints), control points are
+ * placed at ⅓ and ⅔ along the segment for a smooth trajectory.
+ *
+ * @param {number} x1,y1 - Segment start point
+ * @param {number} x2,y2 - Segment end point
+ * @param {object|null} startAnchor - { ellipse, anchorLabel } for start, or null
+ * @param {object|null} endAnchor   - { ellipse, anchorLabel } for end, or null
+ * @returns {{ cp1x, cp1y, cp2x, cp2y }}
+ */
+export function computeCubicControlPoints(x1, y1, x2, y2, startAnchor, endAnchor) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  // Distance the control point extends: at least 30, at most 100, proportional to segment length
+  const dist = Math.max(30, Math.min(100, len * 0.35));
+
+  // Default: control points at ⅓ and ⅔ for a nearly-straight cubic
+  let cp1x = x1 + dx * 0.33;
+  let cp1y = y1 + dy * 0.33;
+  let cp2x = x2 - dx * 0.33;
+  let cp2y = y2 - dy * 0.33;
+
+  // Start anchor: extend straight away from the center of the connected shape
+  if (startAnchor && startAnchor.ellipse && startAnchor.ellipse.parentNode) {
+    const { cx, cy } = ellipseAttrs(startAnchor.ellipse);
+    const adx = x1 - cx;
+    const ady = y1 - cy;
+    const aLen = Math.sqrt(adx * adx + ady * ady);
+    if (aLen > 0.1) {
+      cp1x = x1 + (adx / aLen) * dist;
+      cp1y = y1 + (ady / aLen) * dist;
+    }
+  }
+
+  // End anchor: extend straight away from the center of the connected shape
+  // so the curve approaches the anchor from outside the node.
+  if (endAnchor && endAnchor.ellipse && endAnchor.ellipse.parentNode) {
+    const { cx, cy } = ellipseAttrs(endAnchor.ellipse);
+    const adx = x2 - cx;
+    const ady = y2 - cy;
+    const aLen = Math.sqrt(adx * adx + ady * ady);
+    if (aLen > 0.1) {
+      cp2x = x2 + (adx / aLen) * dist;
+      cp2y = y2 + (ady / aLen) * dist;
+    }
+  }
+
+  return { cp1x, cp1y, cp2x, cp2y };
+}
+
+/**
+ * Get the midpoint of a cubic bezier curve at t=0.5.
+ * Falls back to the old quadratic calculation for legacy arrows that still use _offset.
+ */
+export function getArrowMidpoint(x1, y1, x2, y2, offset, startAnchor, endAnchor) {
+  if (offset !== undefined && offset !== 0) {
+    // Legacy quadratic bezier midpoint
+    const cp = getControlPoint(x1, y1, x2, y2, offset);
+    return {
+      x: 0.25 * x1 + 0.5 * cp.x + 0.25 * x2,
+      y: 0.25 * y1 + 0.5 * cp.y + 0.25 * y2,
+    };
+  }
+  // Cubic bezier at t=0.5
+  const { cp1x, cp1y, cp2x, cp2y } = computeCubicControlPoints(x1, y1, x2, y2, startAnchor, endAnchor);
+  const t = 0.5, u = 1 - t;
+  return {
+    x: u*u*u*x1 + 3*u*u*t*cp1x + 3*u*t*t*cp2x + t*t*t*x2,
+    y: u*u*u*y1 + 3*u*u*t*cp1y + 3*u*t*t*cp2y + t*t*t*y2,
+  };
+}
+
+/**
+ * Legacy quadratic control point helper — kept for backward compatibility
+ * with clipboard paste and any old-style arrows that still use _offset.
+ */
 export function getControlPoint(x1, y1, x2, y2, offset) {
   const mx = (x1 + x2) / 2;
   const my = (y1 + y2) / 2;
@@ -73,30 +153,13 @@ export function getControlPoint(x1, y1, x2, y2, offset) {
   const dy = y2 - y1;
   const len = Math.sqrt(dx * dx + dy * dy);
   if (len < 1) return { x: mx, y: my };
-  // Perpendicular unit vector
   const nx = -dy / len;
   const ny = dx / len;
   return { x: mx + nx * offset, y: my + ny * offset };
 }
 
-export function getArrowMidpoint(x1, y1, x2, y2, offset) {
-  // Quadratic bezier at t=0.5: B(0.5) = 0.25*P0 + 0.5*P1 + 0.25*P2
-  const cp = getControlPoint(x1, y1, x2, y2, offset);
-  return {
-    x: 0.25 * x1 + 0.5 * cp.x + 0.25 * x2,
-    y: 0.25 * y1 + 0.5 * cp.y + 0.25 * y2,
-  };
-}
-
 /**
- * Calculate a signed offset for the arrow curve that pushes the bezier
- * control point AWAY from the connected shapes' bodies, preventing the
- * arrow from passing through them.
- *
- * @param {number} x1,y1 - Arrow start point
- * @param {number} x2,y2 - Arrow end point
- * @param {Array} anchors - Array of { end, ellipse, anchorLabel }
- * @returns {number} Signed offset (positive = right-hand, negative = left-hand)
+ * Legacy signed-offset calculator — kept for backward compat with clipboard/old arrows.
  */
 export function calculateSignedOffset(x1, y1, x2, y2, anchors) {
   const dx = x2 - x1;
@@ -104,20 +167,13 @@ export function calculateSignedOffset(x1, y1, x2, y2, anchors) {
   const len = Math.sqrt(dx * dx + dy * dy);
   const magnitude = len > 10 ? Math.min(50, Math.max(20, len * 0.12)) : 0;
   if (magnitude === 0 || !anchors || anchors.length === 0) return magnitude;
-
-  // For each anchored shape, determine which side of the baseline its
-  // center falls on. Then push the curve to the OPPOSITE side.
   let totalSide = 0;
   for (const anchor of anchors) {
     if (!anchor.ellipse || !anchor.ellipse.parentNode) continue;
     const { cx, cy } = ellipseAttrs(anchor.ellipse);
-    // Cross product: positive = one side, negative = the other
     const side = dx * (cy - y1) - dy * (cx - x1);
     totalSide += Math.sign(side);
   }
-
-  // If shapes lean to one side, flip offset sign to push curve away
-  // If totalSide is 0 (shapes on opposite sides or on the line), keep default
   const sign = totalSide >= 0 ? 1 : -1;
   return magnitude * sign;
 }
@@ -268,21 +324,117 @@ export function updateAnchors() {
 
 // ── Arrow path & anchors ─────────────────────────────────
 
+/**
+ * Build a cubic-bezier path string from the arrow's waypoints.
+ * Each consecutive pair in _points becomes a cubic bezier segment.
+ * Anchored endpoints use direction-away-from-center control points;
+ * intermediate waypoints use ⅓-⅔ default control points for smooth flow.
+ */
 export function updateArrowPath(group) {
-  const { _x1: x1, _y1: y1, _x2: x2, _y2: y2 } = group;
-  const offset = group._offset || 0;
-  const cp = getControlPoint(x1, y1, x2, y2, offset);
-  const d = 'M ' + x1 + ' ' + y1 + ' Q ' + cp.x + ' ' + cp.y + ' ' + x2 + ' ' + y2;
+  const points = group._points;
+  if (!points || points.length < 2) {
+    // Fallback for legacy arrows (clipboard paste, etc.)
+    const { _x1: x1, _y1: y1, _x2: x2, _y2: y2 } = group;
+    const offset = group._offset || 0;
+    const cp = getControlPoint(x1, y1, x2, y2, offset);
+    const d = 'M ' + x1 + ' ' + y1 + ' Q ' + cp.x + ' ' + cp.y + ' ' + x2 + ' ' + y2;
+    group._hitPath.setAttribute('d', d);
+    group._visPath.setAttribute('d', d);
+    return;
+  }
+
+  const startAnchor = group._anchors?.find(a => a.end === 'start');
+  const endAnchor = group._anchors?.find(a => a.end === 'end');
+
+  let d = '';
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i];
+    const p3 = points[i + 1];
+
+    const segStartAnchor = i === 0 ? startAnchor : null;
+    const segEndAnchor = i === points.length - 2 ? endAnchor : null;
+
+    const { cp1x, cp1y, cp2x, cp2y } = computeCubicControlPoints(
+      p0.x, p0.y, p3.x, p3.y, segStartAnchor, segEndAnchor
+    );
+
+    if (i === 0) {
+      d += `M ${p0.x} ${p0.y} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p3.x} ${p3.y}`;
+    } else {
+      d += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p3.x} ${p3.y}`;
+    }
+  }
+
   group._hitPath.setAttribute('d', d);
   group._visPath.setAttribute('d', d);
 }
 
+/**
+ * Insert a waypoint into an arrow at the given SVG coordinates.
+ * The waypoint is inserted between the two closest consecutive waypoints.
+ * Returns the index of the new waypoint, or -1 if insertion failed.
+ */
+export function insertArrowWaypoint(group, x, y) {
+  const points = group._points;
+  if (!points || points.length < 2) return -1;
+
+  // Find which segment the click is closest to by measuring midpoint distance
+  let bestSeg = 0;
+  let bestDist = Infinity;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i];
+    const p3 = points[i + 1];
+    // Sample the segment midpoint as an approximation
+    const mx = (p0.x + p3.x) / 2;
+    const my = (p0.y + p3.y) / 2;
+    const d = (x - mx) ** 2 + (y - my) ** 2;
+    if (d < bestDist) {
+      bestDist = d;
+      bestSeg = i;
+    }
+  }
+
+  // Insert the new waypoint after bestSeg
+  const newPoint = { x, y };
+  points.splice(bestSeg + 1, 0, newPoint);
+
+  // Keep _x1/_y1/_x2/_y2 in sync for backward compat
+  group._x1 = points[0].x;
+  group._y1 = points[0].y;
+  group._x2 = points[points.length - 1].x;
+  group._y2 = points[points.length - 1].y;
+
+  updateArrowPath(group);
+  return bestSeg + 1;
+}
+
 export function setArrowAttrs(group, attrs) {
   // Update the stored coordinates and regenerate the path
-  if (attrs.x1 !== undefined) group._x1 = attrs.x1;
-  if (attrs.y1 !== undefined) group._y1 = attrs.y1;
-  if (attrs.x2 !== undefined) group._x2 = attrs.x2;
-  if (attrs.y2 !== undefined) group._y2 = attrs.y2;
+  if (attrs.x1 !== undefined) {
+    group._x1 = attrs.x1;
+    if (group._points && group._points.length > 0) {
+      group._points[0].x = attrs.x1;
+    }
+  }
+  if (attrs.y1 !== undefined) {
+    group._y1 = attrs.y1;
+    if (group._points && group._points.length > 0) {
+      group._points[0].y = attrs.y1;
+    }
+  }
+  if (attrs.x2 !== undefined) {
+    group._x2 = attrs.x2;
+    if (group._points && group._points.length > 0) {
+      group._points[group._points.length - 1].x = attrs.x2;
+    }
+  }
+  if (attrs.y2 !== undefined) {
+    group._y2 = attrs.y2;
+    if (group._points && group._points.length > 0) {
+      group._points[group._points.length - 1].y = attrs.y2;
+    }
+  }
   updateArrowPath(group);
 }
 
@@ -594,15 +746,28 @@ export function startMultiDrag(e) {
         cy: parseFloat(el.getAttribute('cy')),
       });
     } else if (type === 'arrow') {
-      snapshots.push({
-        el,
-        type: 'arrow',
-        x1: el._x1,
-        y1: el._y1,
-        x2: el._x2,
-        y2: el._y2,
-      });
-    }
+      const points = el._points;
+      if (points && points.length >= 2) {
+        snapshots.push({
+          el,
+          type: 'arrow',
+          points: points.map(p => ({ x: p.x, y: p.y })),
+          x1: el._x1,
+          y1: el._y1,
+          x2: el._x2,
+          y2: el._y2,
+        });
+      } else {
+        snapshots.push({
+          el,
+          type: 'arrow',
+          x1: el._x1,
+          y1: el._y1,
+          x2: el._x2,
+          y2: el._y2,
+        });
+      }
+    } 
   }
 
   let dragged = false;
@@ -635,8 +800,20 @@ export function startMultiDrag(e) {
               updateAnchoredArrows(anchor.ellipse);
             }
           }
+        } else if (snap.points) {
+          // Free-floating arrow with waypoints: move all points
+          const pts = snap.el._points;
+          for (let i = 0; i < pts.length; i++) {
+            pts[i].x = snap.points[i].x + dx;
+            pts[i].y = snap.points[i].y + dy;
+          }
+          snap.el._x1 = pts[0].x;
+          snap.el._y1 = pts[0].y;
+          snap.el._x2 = pts[pts.length - 1].x;
+          snap.el._y2 = pts[pts.length - 1].y;
+          updateArrowPath(snap.el);
         } else {
-          // Free-floating arrow: move as a whole
+          // Legacy free-floating arrow: move as a whole
           setArrowAttrs(snap.el, {
             x1: snap.x1 + dx,
             y1: snap.y1 + dy,

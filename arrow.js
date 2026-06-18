@@ -5,6 +5,7 @@ import {
   getPos, findOvalAt, ellipseAttrs, lineAttrs,
   getEllipseEdgePoint, updateArrowPath, setArrowAttrs,
   calculateSignedOffset, updateAnchoredArrows,
+  computeCubicControlPoints, insertArrowWaypoint,
   startMultiDrag, applyArrowDirection
 } from './helpers.js';
 import { selectElement, showLineHandles, updateLegend, hideContextMenu } from './select.js';
@@ -63,19 +64,14 @@ export function updateArrowPreview(pos) {
     _arrowPreviewLine.setAttribute('marker-end', 'url(#prev-arrowhead)');
     svg.appendChild(_arrowPreviewLine);
   }
-  // Compute the same subtle curve for the preview
-  const dx = pos.x - _arrowStart.x;
-  const dy = pos.y - _arrowStart.y;
-  const len = Math.sqrt(dx * dx + dy * dy);
-  const offset = len > 10 ? Math.min(50, Math.max(20, len * 0.12)) : 0;
-  const cp = { x: (_arrowStart.x + pos.x) / 2, y: (_arrowStart.y + pos.y) / 2 };
-  if (len > 1) {
-    const nx = -dy / len;
-    const ny = dx / len;
-    cp.x += nx * offset;
-    cp.y += ny * offset;
-  }
-  _arrowPreviewLine.setAttribute('d', 'M ' + _arrowStart.x + ' ' + _arrowStart.y + ' Q ' + cp.x + ' ' + cp.y + ' ' + pos.x + ' ' + pos.y);
+  // Cubic bezier preview: start anchor direction (if any), default control points for end
+  const startAnchor = _arrowStartAnchor && _arrowStartLabel
+    ? { ellipse: _arrowStartAnchor, anchorLabel: _arrowStartLabel }
+    : null;
+  const { cp1x, cp1y, cp2x, cp2y } = computeCubicControlPoints(
+    _arrowStart.x, _arrowStart.y, pos.x, pos.y, startAnchor, null
+  );
+  _arrowPreviewLine.setAttribute('d', `M ${_arrowStart.x} ${_arrowStart.y} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${pos.x} ${pos.y}`);
 }
 
 export function showArrowStartDot(pos) {
@@ -96,12 +92,19 @@ export function showArrowStartDot(pos) {
 export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorLabel, endAnchorLabel) {
   const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
   group.style.cursor = 'pointer';
+
+  // ── Waypoint-based data model ────────────────────────────
+  group._points = [
+    { x: x1, y: y1 },
+    { x: x2, y: y2 },
+  ];
   group._anchors = [];
   group._x1 = x1;
   group._y1 = y1;
   group._x2 = x2;
   group._y2 = y2;
-  // Build anchor array for offset sign calculation
+
+  // Build anchor array for offset sign calculation (legacy compat)
   const anchorsForOffset = [];
   if (startAnchor) {
     anchorsForOffset.push({ end: 'start', ellipse: startAnchor, anchorLabel: startAnchorLabel || 'right' });
@@ -109,7 +112,7 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
   if (endAnchor) {
     anchorsForOffset.push({ end: 'end', ellipse: endAnchor, anchorLabel: endAnchorLabel || 'left' });
   }
-  // Auto-calculate a signed curve offset that avoids shape bodies
+  // Legacy offset (kept for backward compat with clipboard)
   group._offset = calculateSignedOffset(x1, y1, x2, y2, anchorsForOffset);
 
   // Store anchor references if provided (with cardinal label)
@@ -146,7 +149,7 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
   updateArrowPath(group);
   applyArrowDirection(group);
 
-  // Click on arrow → select it
+  // ── Click on arrow → select OR add waypoint ────────────
   group.addEventListener('click', (e) => {
     // In arrow mode, don't stop propagation — let the SVG handler place the arrow
     if (currentTool === 'arrow') return;
@@ -157,6 +160,20 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
       return;
     }
     e.stopPropagation();
+
+    // Check if the click was on an existing waypoint handle (don't insert there)
+    if (e.target.classList.contains('waypoint-handle')) return;
+
+    // If the arrow is already selected and this is a single-selection,
+    // clicking on the path inserts a new waypoint at the click position.
+    if (selectedSet.has(group) && selectedSet.size === 1) {
+      const pos = getPos(e);
+      insertArrowWaypoint(group, pos.x, pos.y);
+      showLineHandles(group);
+      return;
+    }
+
+    // Regular click: select the arrow
     selectElement(group, 'arrow', e.shiftKey);
   });
 
@@ -181,7 +198,9 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
     }
 
     const startPos = getPos(e);
-    const { x1, y1, x2, y2 } = lineAttrs(group);
+    const points = group._points;
+    // Snapshot all waypoint positions before drag starts
+    const startPoints = points.map(p => ({ x: p.x, y: p.y }));
     let dragged = false;
 
     function onMove(me) {
@@ -190,11 +209,19 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
       const pos = getPos(me);
       const dx = pos.x - startPos.x;
       const dy = pos.y - startPos.y;
-      // Move both endpoints by the drag delta
-      setArrowAttrs(group, {
-        x1: x1 + dx, y1: y1 + dy,
-        x2: x2 + dx, y2: y2 + dy,
-      });
+
+      // Shift ALL waypoints by the drag delta
+      for (let i = 0; i < points.length; i++) {
+        points[i].x = startPoints[i].x + dx;
+        points[i].y = startPoints[i].y + dy;
+      }
+
+      // Keep _x1/_y1/_x2/_y2 in sync for backward compat
+      group._x1 = points[0].x;
+      group._y1 = points[0].y;
+      group._x2 = points[points.length - 1].x;
+      group._y2 = points[points.length - 1].y;
+
       // Re-snap anchored endpoints back to their connected nodes
       // so the arrow stays attached at both ends
       if (group._anchors && group._anchors.length > 0) {
@@ -203,11 +230,14 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
             updateAnchoredArrows(anchor.ellipse);
           }
         }
-        // Refresh the offset so the curve avoids shape bodies
-        const { x1: nx1, y1: ny1, x2: nx2, y2: ny2 } = lineAttrs(group);
-        group._offset = calculateSignedOffset(nx1, ny1, nx2, ny2, group._anchors);
-        updateArrowPath(group);
+        // Re-sync _points[0] and _points[last] after anchoring
+        points[0].x = group._x1;
+        points[0].y = group._y1;
+        points[points.length - 1].x = group._x2;
+        points[points.length - 1].y = group._y2;
       }
+
+      updateArrowPath(group);
       showLineHandles(group);
     }
 
