@@ -13,7 +13,7 @@ import {
   setArrowAttrs, updateArrowPath, updateArrowMarker, applyArrowDirection,
   updateOvalTextPosition, updateAnchoredArrows,
   calculateSignedOffset,
-  showAnchors, hideAnchors, updateAnchors,
+  showAnchors, hideAnchors, updateAnchors, removeOvalText,
   darkenColor, lightenColor, snapToGrid
 } from './helpers.js';
 
@@ -275,10 +275,9 @@ function applyColor(color) {
 
 function deleteSelected() {
   if (selectedSet.size === 0) return;
-  const affected = [...selectedSet];
+  const affected = [...selectedSet].map(el => ({ el, elType: selectedTypes.get(el) }));
   deselect();
-  for (const el of affected) {
-    const elType = selectedTypes.get(el);
+  for (const { el, elType } of affected) {
     if (elType === 'ellipse') {
       removeOvalText(el);
       const arrows = svg.querySelectorAll('g');

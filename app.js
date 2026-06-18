@@ -462,10 +462,9 @@ document.addEventListener('keydown', (e) => {
     if (e.target.isContentEditable) return;
 
     e.preventDefault();
-    const affected = [...selectedSet];
+    const affected = [...selectedSet].map(el => ({ el, elType: selectedTypes.get(el) }));
     deselect();
-    for (const el of affected) {
-      const elType = selectedTypes.get(el);
+    for (const { el, elType } of affected) {
       if (elType === 'ellipse') {
         removeOvalText(el);
         const arrows = svg.querySelectorAll('g');
