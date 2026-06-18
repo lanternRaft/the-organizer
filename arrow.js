@@ -4,7 +4,7 @@ import { svg, INFO, defs, selected, selectedType, currentTool, selectedSet, sele
 import {
   getPos, findOvalAt, ellipseAttrs, lineAttrs,
   getEllipseEdgePoint, updateArrowPath, setArrowAttrs,
-  calculateSignedOffset, startMultiDrag
+  calculateSignedOffset, startMultiDrag, applyArrowDirection
 } from './helpers.js';
 import { selectElement, showLineHandles, updateLegend, hideContextMenu } from './select.js';
 
@@ -134,15 +134,16 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
   visPath.setAttribute('fill', 'none');
   visPath.setAttribute('stroke-linecap', 'round');
   visPath.setAttribute('data-original-color', '#3b82f6');
-  visPath.setAttribute('marker-end', 'url(#arrowhead)');
   group.appendChild(visPath);
 
   // Store references for later attribute access
   group._hitPath = hitPath;
   group._visPath = visPath;
+  group._arrowDirection = 'mono';
 
-  // Set initial path geometry
+  // Set initial path geometry and markers
   updateArrowPath(group);
+  applyArrowDirection(group);
 
   // Click on arrow → select it
   group.addEventListener('click', (e) => {

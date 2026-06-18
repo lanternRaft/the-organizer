@@ -242,6 +242,20 @@ svg rect {
   background: rgba(248, 113, 113, 0.15);
   color: #f87171;
 }
+#selection-menu .sel-separator {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 2px;
+  flex-shrink: 0;
+}
+#selection-menu .sel-btn.active-dir {
+  background: #3b82f6;
+  color: #fff;
+}
+#selection-menu .sel-btn.active-dir:hover {
+  background: #2563eb;
+}
 
 /* ── Color palette popup ────────────────────────── */
 #color-palette-popup {

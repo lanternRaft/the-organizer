@@ -353,27 +353,73 @@ export function lightenColor(hex, percent) {
 
 // ── Arrow marker helpers ────────────────────────────────
 
-export function updateArrowMarker(lineEl, color) {
-  // Remove old marker
-  lineEl.removeAttribute('marker-end');
-  // Create a new marker with the right color
-  const markerId = 'arrowhead-' + color.replace('#', '');
-  let existing = document.getElementById(markerId);
-  if (!existing) {
-    existing = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
-    existing.setAttribute('id', markerId);
-    existing.setAttribute('markerWidth', '12');
-    existing.setAttribute('markerHeight', '8');
-    existing.setAttribute('refX', '12');
-    existing.setAttribute('refY', '4');
-    existing.setAttribute('orient', 'auto');
+/**
+ * Apply the current arrow direction (none/mono/dual) to an arrow group,
+ * updating marker-start and marker-end on its visPath.
+ */
+export function applyArrowDirection(group) {
+  const direction = group._arrowDirection || 'mono';
+  const vis = group._visPath;
+  if (!vis) return;
+
+  const color = vis.getAttribute('stroke') || '#3b82f6';
+  const safeColor = color.replace('#', '');
+  const endMarkerId = 'arrowhead-' + safeColor;
+  const startMarkerId = 'arrowhead-start-' + safeColor;
+
+  // Remove both markers
+  vis.removeAttribute('marker-start');
+  vis.removeAttribute('marker-end');
+
+  if (direction === 'none') return;
+
+  // Ensure end marker exists (unchanged: tip at refX=12 pointing forward)
+  let endMarker = document.getElementById(endMarkerId);
+  if (!endMarker) {
+    endMarker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    endMarker.setAttribute('id', endMarkerId);
+    endMarker.setAttribute('markerWidth', '12');
+    endMarker.setAttribute('markerHeight', '8');
+    endMarker.setAttribute('refX', '12');
+    endMarker.setAttribute('refY', '4');
+    endMarker.setAttribute('orient', 'auto');
     const p = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
     p.setAttribute('points', '0 0, 12 4, 0 8');
     p.setAttribute('fill', color);
-    existing.appendChild(p);
-    defs.appendChild(existing);
+    endMarker.appendChild(p);
+    defs.appendChild(endMarker);
   }
-  lineEl.setAttribute('marker-end', 'url(#' + markerId + ')');
+
+  vis.setAttribute('marker-end', 'url(#' + endMarkerId + ')');
+
+  // For dual, also add a start marker with reversed tip (refX=0, flipped polygon)
+  if (direction === 'dual') {
+    let startMarker = document.getElementById(startMarkerId);
+    if (!startMarker) {
+      startMarker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+      startMarker.setAttribute('id', startMarkerId);
+      startMarker.setAttribute('markerWidth', '12');
+      startMarker.setAttribute('markerHeight', '8');
+      startMarker.setAttribute('refX', '0');
+      startMarker.setAttribute('refY', '4');
+      startMarker.setAttribute('orient', 'auto');
+      const p = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      // Reversed triangle: tip at x=0, base at x=12, so arrow points opposite to path direction
+      p.setAttribute('points', '12 0, 0 4, 12 8');
+      p.setAttribute('fill', color);
+      startMarker.appendChild(p);
+      defs.appendChild(startMarker);
+    }
+    vis.setAttribute('marker-start', 'url(#' + startMarkerId + ')');
+  }
+}
+
+export function updateArrowMarker(lineEl, color) {
+  // Delegate to applyArrowDirection which respects the group's direction setting
+  const group = lineEl.parentNode;
+  if (group) {
+    applyArrowDirection(group);
+  }
 }
 
 // ── Oval text helpers ───────────────────────────────────

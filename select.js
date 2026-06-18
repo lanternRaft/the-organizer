@@ -10,7 +10,7 @@ import {
 import {
   getPos, findOvalAt, findAnchorNear, ellipseAttrs, lineAttrs,
   getEllipseEdgePoint, getArrowMidpoint,
-  setArrowAttrs, updateArrowPath, updateArrowMarker,
+  setArrowAttrs, updateArrowPath, updateArrowMarker, applyArrowDirection,
   updateOvalTextPosition, updateAnchoredArrows,
   calculateSignedOffset,
   showAnchors, hideAnchors, updateAnchors,
@@ -202,6 +202,20 @@ function showSelectionMenu(el) {
   const rect = getElementScreenRect(el);
   if (!rect || rect.width === 0) return;
 
+  // Show/hide direction buttons based on element type
+  const isArrow = selectedTypes.get(el) === 'arrow';
+  selMenu.querySelectorAll('.sel-dir-none, .sel-dir-mono, .sel-dir-dual, .sel-separator').forEach(btn => {
+    btn.style.display = isArrow ? '' : 'none';
+  });
+
+  // Set the active direction button
+  if (isArrow) {
+    const dir = el._arrowDirection || 'mono';
+    selMenu.querySelectorAll('.sel-dir-none, .sel-dir-mono, .sel-dir-dual').forEach(btn => {
+      btn.classList.toggle('active-dir', btn.getAttribute('data-dir') === dir);
+    });
+  }
+
   // Show and measure the menu so we can compute centered position
   selMenu.style.display = 'flex';
   selMenu.style.visibility = 'hidden';
@@ -306,6 +320,38 @@ colorPalette?.addEventListener('click', (e) => {
 
 // Click outside the color palette to close it
 // (handled at document level in app.js)
+
+// ── Arrow direction buttons ─────────────────────────────
+
+function applyDirection(direction) {
+  if (selectedSet.size === 0) return;
+  for (const el of selectedSet) {
+    const elType = selectedTypes.get(el);
+    if (elType !== 'arrow') continue;
+    el._arrowDirection = direction;
+    applyArrowDirection(el);
+  }
+  // Update which button is active
+  selMenu.querySelectorAll('.sel-dir-none, .sel-dir-mono, .sel-dir-dual').forEach(btn => {
+    btn.classList.toggle('active-dir', btn.getAttribute('data-dir') === direction);
+  });
+  hideColorPalette();
+}
+
+selMenu?.querySelector('.sel-dir-none')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  applyDirection('none');
+});
+
+selMenu?.querySelector('.sel-dir-mono')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  applyDirection('mono');
+});
+
+selMenu?.querySelector('.sel-dir-dual')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  applyDirection('dual');
+});
 
 // ── Handles ──────────────────────────────────────────────
 
