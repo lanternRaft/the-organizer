@@ -190,6 +190,12 @@ const ANCHOR_DOT_RADIUS = 4;
 const ANCHOR_CLASS = 'anchor-point';
 const _anchorDots = new Map(); // ellipse -> [{label, el}]
 
+// ── Arrow marker constants ────────────────────────────────
+
+const ARROWHEAD_WIDTH = 9.6;
+const ARROWHEAD_HEIGHT = 6.4;
+const ARROWHEAD_ANCHOR_EXT = 40; // straight-line extension from anchor edge (shrunk to leave room for marker tip)
+
 /**
  * Get the 4 cardinal anchor points for an ellipse at the ellipse edge.
  * These positions are used as actual arrow endpoints.
@@ -392,7 +398,9 @@ function getAnchorDir(label) {
 
 /**
  * Compute the SVG path string for a waypoint-based arrow.
- * For anchored endpoints, it extends straight away by 50px before curving.
+ * For anchored endpoints, the straight-line extension uses ARROWHEAD_ANCHOR_EXT (40px).
+ * The path ends exactly at the ellipse edge; the end-marker tip (at refX=ARROWHEAD_WIDTH)
+ * overlaps the endpoint so there is no gap between the arrowhead tip and the shape.
  */
 export function getArrowPathString(points, startAnchor, endAnchor) {
   if (!points || points.length < 2) return '';
@@ -405,7 +413,7 @@ export function getArrowPathString(points, startAnchor, endAnchor) {
   let p0 = points[0];
   if (startAnchor && startAnchor.ellipse && startAnchor.ellipse.parentNode) {
     const dir = getAnchorDir(startAnchor.anchorLabel);
-    p0 = { x: p0.x + dir.x * 50, y: p0.y + dir.y * 50 };
+    p0 = { x: p0.x + dir.x * ARROWHEAD_ANCHOR_EXT, y: p0.y + dir.y * ARROWHEAD_ANCHOR_EXT };
     d += ` L ${p0.x} ${p0.y}`;
   }
 
@@ -416,10 +424,12 @@ export function getArrowPathString(points, startAnchor, endAnchor) {
     const segStartAnchor = i === 0 ? startAnchor : null;
     const segEndAnchor = i === points.length - 2 ? endAnchor : null;
 
-    // If this is the last segment and end is anchored, segEnd is pEnd_straight
+    // If this is the last segment and end is anchored, extend segEnd by ARROWHEAD_ANCHOR_EXT.
+    // The end-marker (tip at x=0, refX=0) is placed at that endpoint — its tip sits
+    // exactly at the ellipse edge and its body trails back along the last straight segment.
     if (segEndAnchor && segEndAnchor.ellipse && segEndAnchor.ellipse.parentNode) {
       const dir = getAnchorDir(segEndAnchor.anchorLabel);
-      segEnd = { x: segEnd.x + dir.x * 50, y: segEnd.y + dir.y * 50 };
+      segEnd = { x: segEnd.x + dir.x * ARROWHEAD_ANCHOR_EXT, y: segEnd.y + dir.y * ARROWHEAD_ANCHOR_EXT };
     }
 
     const { cp1x, cp1y, cp2x, cp2y } = computeCubicControlPoints(
@@ -622,43 +632,50 @@ export function applyArrowDirection(group) {
 
   if (direction === 'none') return;
 
-  // Ensure end marker exists (unchanged: tip at refX=12 pointing forward)
+  // Always update end marker to reflect current ARROWHEAD constants
   let endMarker = document.getElementById(endMarkerId);
   if (!endMarker) {
     endMarker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
     endMarker.setAttribute('id', endMarkerId);
-    endMarker.setAttribute('markerWidth', '12');
-    endMarker.setAttribute('markerHeight', '8');
-    endMarker.setAttribute('refX', '12');
-    endMarker.setAttribute('refY', '4');
-    endMarker.setAttribute('orient', 'auto');
-    const p = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-    p.setAttribute('points', '0 0, 12 4, 0 8');
-    p.setAttribute('fill', color);
-    endMarker.appendChild(p);
     defs.appendChild(endMarker);
   }
+  // Remove old polygon if present so we recreate with correct geometry
+  while (endMarker.firstChild) endMarker.removeChild(endMarker.firstChild);
+  endMarker.setAttribute('markerWidth', String(ARROWHEAD_WIDTH));
+  endMarker.setAttribute('markerHeight', String(ARROWHEAD_HEIGHT));
+  // refX at the tip position so the tip lands exactly at the path endpoint (no gap)
+  endMarker.setAttribute('refX', String(ARROWHEAD_WIDTH));
+  endMarker.setAttribute('refY', String(ARROWHEAD_HEIGHT / 2));
+  endMarker.setAttribute('orient', 'auto');
+  const ep = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  // Classic arrowhead: tip faces forward (+x) at refX, base trails behind at x=0
+  ep.setAttribute('points', `0 0, ${ARROWHEAD_WIDTH} ${ARROWHEAD_HEIGHT / 2}, 0 ${ARROWHEAD_HEIGHT}`);
+  ep.setAttribute('fill', color);
+  endMarker.appendChild(ep);
 
   vis.setAttribute('marker-end', 'url(#' + endMarkerId + ')');
 
-  // For dual, also add a start marker with reversed tip (refX=0, flipped polygon)
+  // For dual, always update the start marker too
   if (direction === 'dual') {
     let startMarker = document.getElementById(startMarkerId);
     if (!startMarker) {
       startMarker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
       startMarker.setAttribute('id', startMarkerId);
-      startMarker.setAttribute('markerWidth', '12');
-      startMarker.setAttribute('markerHeight', '8');
-      startMarker.setAttribute('refX', '0');
-      startMarker.setAttribute('refY', '4');
-      startMarker.setAttribute('orient', 'auto');
-      const p = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-      // Reversed triangle: tip at x=0, base at x=12, so arrow points opposite to path direction
-      p.setAttribute('points', '12 0, 0 4, 12 8');
-      p.setAttribute('fill', color);
-      startMarker.appendChild(p);
       defs.appendChild(startMarker);
     }
+    while (startMarker.firstChild) startMarker.removeChild(startMarker.firstChild);
+    startMarker.setAttribute('markerWidth', String(ARROWHEAD_WIDTH));
+    startMarker.setAttribute('markerHeight', String(ARROWHEAD_HEIGHT));
+    // For marker-start, refX=0 places the base at the path start; tip extends backward.
+    startMarker.setAttribute('refX', '0');
+    startMarker.setAttribute('refY', String(ARROWHEAD_HEIGHT / 2));
+    startMarker.setAttribute('orient', 'auto');
+    const sp = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+    // Reversed: tip faces backward at x=ARROWHEAD_WIDTH, base at x=0.
+    // orient="auto" mirrors it so the tip points INTO the start shape.
+    sp.setAttribute('points', `${ARROWHEAD_WIDTH} 0, 0 ${ARROWHEAD_HEIGHT / 2}, ${ARROWHEAD_WIDTH} ${ARROWHEAD_HEIGHT}`);
+    sp.setAttribute('fill', color);
+    startMarker.appendChild(sp);
     vis.setAttribute('marker-start', 'url(#' + startMarkerId + ')');
   }
 }
@@ -673,10 +690,6 @@ export function updateArrowMarker(lineEl, color) {
 
 // ── Oval text helpers ───────────────────────────────────
 
-/**
- * Word-wrap text into lines that fit within maxWidth at the given fontSize.
- * Uses a temporary SVG text element for accurate measurement.
- */
 function wrapText(text, fontSize, maxWidth) {
   if (!text) return [];
 

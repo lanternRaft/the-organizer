@@ -71,14 +71,14 @@ SVG `<g>` groups containing two `<path>` children: `_visPath` (visible stroke) a
 - **Waypoint-based data model**: `group._points` is an array of `{x, y}` waypoints (minimum 2)
 - **Legacy compat**: `group._x1, _y1, _x2, _y2` kept in sync with first/last waypoints
 - **Legacy offset**: `group._offset` kept for clipboard backward compatibility
-- **Path computation**: Cubic bezier curves combined with 50px straight extensions from anchors.
-  - Anchored endpoints: the arrow starts/ends with a 50px straight line segment extending straight away from the shape (opposite direction from the anchor). The cubic bezier curve then connects the ends of these straight segments. Control points are aligned with the straight segments to ensure a C1 continuous, smooth transition.
+- **Path computation**: Cubic bezier curves combined with `ARROWHEAD_ANCHOR_EXT=40px` straight extensions from anchors. The path draws to the exact ellipse edge; the end-marker tip (at `refX=ARROWHEAD_WIDTH`) is placed at that endpoint so there is zero gap between the arrowhead tip and the shape.
+  - Anchored endpoints: the arrow extends 40px straight out from each anchor before curving. The cubic bezier curve connects the extended points. Control points are aligned with the straight segments to ensure a C1 continuous, smooth transition.
   - Intermediate waypoints: control points at ⅓ and ⅔ of the segment for smooth flow
 - **Direction** (controlled via selection menu buttons):
   - `mono` (default): Single arrowhead at end
   - `dual`: Arrowheads at both start and end
   - `none`: No arrowheads
-  - Dynamic `<marker>` elements in `<defs>`, keyed by color (e.g. `arrowhead-#3b82f6`)
+  - Dynamic `<marker>` elements in `<defs>`, keyed by color (e.g. `arrowhead-#3b82f6`) with dimensions 9.6×6.4 (20% smaller than original 12×8). End marker uses a classic arrowhead polygon (tip at `refX`, base trailing back) so the tip touches the path endpoint with no gap.
 - **Waypoint insertion**: Click on a selected arrow's path to insert a new waypoint at that position
 - **Hit testing**: Wide transparent path (`stroke-width=14`) for easier clicking
 
