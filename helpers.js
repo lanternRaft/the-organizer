@@ -453,8 +453,14 @@ export function getArrowPathString(points, startAnchor, endAnchor) {
       return { x: dx / len, y: dy / len };
     }
     if (i === nodes.length - 1) {
-      // Anchored end: outward cardinal direction (curve approaches from outside)
-      if (hasEndAnchor) return getAnchorDir(endAnchor.anchorLabel);
+      // Anchored end: use the INWARD direction as the tangent.
+      // Because cp2 = endExt − tangent × dist, using inward gives
+      // cp2 = endExt + outward × dist — further outside the shape —
+      // so the curve approaches endExt coming from outside, not doubling back.
+      if (hasEndAnchor) {
+        const dir = getAnchorDir(endAnchor.anchorLabel);
+        return { x: -dir.x, y: -dir.y };
+      }
       // Unanchored: direction from previous node
       const dx = nodes[i].x - nodes[i - 1].x, dy = nodes[i].y - nodes[i - 1].y;
       const len = Math.sqrt(dx * dx + dy * dy) || 1;
