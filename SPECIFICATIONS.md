@@ -118,12 +118,21 @@ The following module-level state tracks a drag in progress in `arrow.js`:
 
 ### Anchors
 
-Every `<ellipse>` (shapes and nodes) has 4 cardinal anchor points:
+Every `<ellipse>` (shapes and nodes) has 4 cardinal anchor points. Two sets of positions are maintained:
 
+**Edge positions** (`getAnchorPoints`) — used as actual arrow endpoints:
 - **top**: `{x: cx, y: cy - ry}`
 - **left**: `{x: cx - rx, y: cy}`
 - **bottom**: `{x: cx, y: cy + ry}`
 - **right**: `{x: cx + rx, y: cy}`
+
+**Dot positions** (`getAnchorDotPoints`) — each offset `ANCHOR_OFFSET = 5` px outward, used for dot rendering and snap hit-testing so the visible handle and snap zone match:
+- **top**: `{x: cx, y: cy - ry - 5}`
+- **left**: `{x: cx - rx - 5, y: cy}`
+- **bottom**: `{x: cx, y: cy + ry + 5}`
+- **right**: `{x: cx + rx + 5, y: cy}`
+
+`findAnchorNear` snaps based on dot positions but returns the edge `anchorPos` so arrows connect at the ellipse boundary.
 
 Anchor dots are SVG `<circle>` elements with class `anchor-point`, white fill, blue stroke, radius 4. Dots have `pointer-events: auto` (interactive) and store references to their parent ellipse and anchor label via `_anchorEllipse` and `_anchorLabel` properties.
 

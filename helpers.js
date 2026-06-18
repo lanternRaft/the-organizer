@@ -191,20 +191,39 @@ const ANCHOR_CLASS = 'anchor-point';
 const _anchorDots = new Map(); // ellipse -> [{label, el}]
 
 /**
- * Get the 4 cardinal anchor points for an ellipse.
+ * Get the 4 cardinal anchor points for an ellipse at the ellipse edge.
+ * These positions are used as actual arrow endpoints.
  * Positions: top, left, bottom, right (relative to the shape's center).
  */
+const ANCHOR_OFFSET = 5;
 export function getAnchorPoints(cx, cy, rx, ry) {
   return {
-    top:    { x: cx, y: cy - ry, label: 'top' },
-    left:   { x: cx - rx, y: cy, label: 'left' },
-    bottom: { x: cx, y: cy + ry, label: 'bottom' },
-    right:  { x: cx + rx, y: cy, label: 'right' },
+    top:    { x: cx,      y: cy - ry,           label: 'top' },
+    left:   { x: cx - rx, y: cy,                label: 'left' },
+    bottom: { x: cx,      y: cy + ry,           label: 'bottom' },
+    right:  { x: cx + rx, y: cy,                label: 'right' },
+  };
+}
+
+/**
+ * Get the 4 anchor dot positions — each offset ANCHOR_OFFSET px outward
+ * from the ellipse edge. Used for dot rendering and snap hit-testing so the
+ * visible handle and the snap zone match, while the arrow still ends at the edge.
+ */
+export function getAnchorDotPoints(cx, cy, rx, ry) {
+  return {
+    top:    { x: cx,                      y: cy - ry - ANCHOR_OFFSET, label: 'top' },
+    left:   { x: cx - rx - ANCHOR_OFFSET, y: cy,                      label: 'left' },
+    bottom: { x: cx,                      y: cy + ry + ANCHOR_OFFSET, label: 'bottom' },
+    right:  { x: cx + rx + ANCHOR_OFFSET, y: cy,                      label: 'right' },
   };
 }
 
 /**
  * Find the nearest anchor point within ANCHOR_SNAP_RADIUS of the given position.
+ * Snap detection is based on the dot's visual position (getAnchorDotPoints) so
+ * hovering over the visible handle triggers correctly, but anchorPos returned is
+ * the edge position used as the actual arrow endpoint.
  * Returns { ellipse, anchorPos, anchorLabel } or null.
  */
 export function findAnchorNear(pos, threshold = ANCHOR_SNAP_RADIUS) {
@@ -214,14 +233,15 @@ export function findAnchorNear(pos, threshold = ANCHOR_SNAP_RADIUS) {
 
   for (const el of ellipses) {
     const { cx, cy, rx, ry } = ellipseAttrs(el);
-    const anchors = getAnchorPoints(cx, cy, rx, ry);
-    for (const [label, anchorPos] of Object.entries(anchors)) {
-      const dx = pos.x - anchorPos.x;
-      const dy = pos.y - anchorPos.y;
+    const dotPoints  = getAnchorDotPoints(cx, cy, rx, ry);
+    const edgePoints = getAnchorPoints(cx, cy, rx, ry);
+    for (const [label, dotPos] of Object.entries(dotPoints)) {
+      const dx = pos.x - dotPos.x;
+      const dy = pos.y - dotPos.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < bestDist) {
         bestDist = dist;
-        best = { ellipse: el, anchorPos, anchorLabel: label };
+        best = { ellipse: el, anchorPos: edgePoints[label], anchorLabel: label };
       }
     }
   }
@@ -235,7 +255,7 @@ export function findAnchorNear(pos, threshold = ANCHOR_SNAP_RADIUS) {
 function _createDotsForEllipse(el) {
   if (_anchorDots.has(el)) return;
   const { cx, cy, rx, ry } = ellipseAttrs(el);
-  const anchors = getAnchorPoints(cx, cy, rx, ry);
+  const anchors = getAnchorDotPoints(cx, cy, rx, ry);
   const dots = [];
   for (const [label, pos] of Object.entries(anchors)) {
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -317,9 +337,9 @@ export function updateAnchors() {
       continue;
     }
     const { cx, cy, rx, ry } = ellipseAttrs(ellipse);
-    const anchors = getAnchorPoints(cx, cy, rx, ry);
+    const dotAnchors = getAnchorDotPoints(cx, cy, rx, ry);
     for (const dot of dots) {
-      const pos = anchors[dot.label];
+      const pos = dotAnchors[dot.label];
       dot.el.setAttribute('cx', pos.x);
       dot.el.setAttribute('cy', pos.y);
     }
