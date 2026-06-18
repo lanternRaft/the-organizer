@@ -460,3 +460,18 @@ document.addEventListener('click', (e) => {
 document.addEventListener('contextmenu', (e) => {
   hideContextMenu();
 });
+
+// ── Theme toggle (dark / light) ───────────────────────────
+
+const themeToggle = document.getElementById('theme-toggle');
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+}
+
+themeToggle.addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next = current === 'dark' ? 'light' : 'dark';
+  applyTheme(next);
+});
