@@ -1,6 +1,6 @@
 // ── Entry point: initialises SVG defs, toolbar, and top-level event listeners ──
 
-import { svg, bgRect, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, selMenu, colorPalette, setCurrentTool, shapeMode, setShapeMode } from './state.js';
+import { svg, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, selMenu, colorPalette, setCurrentTool, shapeMode, setShapeMode } from './state.js';
 import { getPos, findOvalAt, findAnchorNear, getAnchorPoints, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText, showAnchors, hideAnchors, updateAnchors, wasMultiDragged, wasDragHappened, darkenColor, lightenColor } from './helpers.js';
 import { deselect, selectElement, updateLegend, hideContextMenu, wasSelBoxDragged } from './select.js';
 import { createShape, showTextInput, hideTextInput } from './shape.js';
@@ -173,7 +173,7 @@ svg.addEventListener('click', (e) => {
   // For 'select' and 'shape', only handle background clicks
   // For 'arrow', allow clicks on any element (ovals, etc.)
   if (currentTool !== 'arrow') {
-    if (e.target !== svg && e.target !== bgRect) return;
+    if (e.target !== svg) return;
   }
 
   switch (currentTool) {

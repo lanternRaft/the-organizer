@@ -1,7 +1,6 @@
 // ── Shared mutable state ──────────────────────────────────
 
 export const svg = document.getElementById('canvas');
-export const bgRect = svg.querySelector('rect');
 export const INFO = document.querySelector('#info');
 export const selMenu = document.getElementById('selection-menu');
 export const colorPalette = document.getElementById('color-palette-popup');

@@ -1,7 +1,7 @@
 // ── Selection, handles, context menu, legend ──────────────
 
 import {
-  svg, bgRect, HANDLE_SIZE, handles, selected, selectedType,
+  svg, HANDLE_SIZE, handles, selected, selectedType,
   selectedSet, selectedTypes,
   INFO, selMenu, colorPalette, legendEl, legendColors, currentTool, shapeMode,
   setSelected, clearSelected
@@ -620,7 +620,7 @@ function getElementsInRect(x, y, w, h) {
 svg.addEventListener('mousedown', (e) => {
   if (currentTool !== 'select') return;
   // Only on background, left button
-  if (e.target !== svg && e.target !== bgRect) return;
+  if (e.target !== svg) return;
   if (e.button !== 0) return;
 
   hideContextMenu();
