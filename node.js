@@ -1,7 +1,7 @@
 // ── Node creation (small fixed-size circles, colorable, no resize) ──
 
 import { svg, currentTool, selectedSet, selectedTypes } from './state.js';
-import { getPos, darkenColor, startMultiDrag, updateAnchors } from './helpers.js';
+import { getPos, darkenColor, startMultiDrag, updateAnchors, updateAnchoredArrows } from './helpers.js';
 import { selectElement, hideContextMenu } from './select.js';
 
 export const NODE_RADIUS = 8;
@@ -77,6 +77,7 @@ export function createNode(x, y) {
       const dy = pos.y - startPos.y;
       circle.setAttribute('cx', startCx + dx);
       circle.setAttribute('cy', startCy + dy);
+      updateAnchoredArrows(circle);
       updateAnchors();
     }
 
