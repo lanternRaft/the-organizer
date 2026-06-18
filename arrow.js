@@ -7,7 +7,7 @@ import {
   getPos, findOvalAt, ellipseAttrs, lineAttrs,
   getEllipseEdgePoint, updateArrowPath, setArrowAttrs,
   calculateSignedOffset, updateAnchoredArrows,
-  computeCubicControlPoints, insertArrowWaypoint,
+  getArrowPathString, insertArrowWaypoint,
   startMultiDrag, applyArrowDirection,
   findAnchorNear, highlightAnchorDot, unhighlightAllAnchors,
   showAnchorsForEllipse, hideAnchorsForEllipse
@@ -99,18 +99,14 @@ export function updateArrowDragPreview(pos) {
 
   const previewPos = snapped ? snapped.anchorPos : pos;
 
-  // Compute preview curve
+  // Compute preview curve using getArrowPathString
   const startAnchor = {
     ellipse: _dragStartAnchor.ellipse,
     anchorLabel: _dragStartAnchor.anchorLabel,
   };
   const endAnchor = snapped ? { ellipse: snapped.ellipse, anchorLabel: snapped.anchorLabel } : null;
-  const { cp1x, cp1y, cp2x, cp2y } = computeCubicControlPoints(
-    startPos.x, startPos.y, previewPos.x, previewPos.y,
-    { ellipse: _dragStartAnchor.ellipse, anchorLabel: _dragStartAnchor.anchorLabel },
-    endAnchor
-  );
-  _dragPreviewLine.setAttribute('d', `M ${startPos.x} ${startPos.y} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${previewPos.x} ${previewPos.y}`);
+  const d = getArrowPathString([startPos, previewPos], startAnchor, endAnchor);
+  _dragPreviewLine.setAttribute('d', d);
 }
 
 // ── Finish the arrow drag (mouseup) ────────────────────

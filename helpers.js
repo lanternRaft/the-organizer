@@ -353,6 +353,66 @@ export function unhighlightAllAnchors() {
 // ── Arrow path & anchors ─────────────────────────────────
 
 /**
+ * Get the outward direction vector for an anchor label.
+ */
+function getAnchorDir(label) {
+  switch (label) {
+    case 'top':    return { x: 0, y: -1 };
+    case 'left':   return { x: -1, y: 0 };
+    case 'bottom': return { x: 0, y: 1 };
+    case 'right':  return { x: 1, y: 0 };
+    default:       return { x: 0, y: 0 };
+  }
+}
+
+/**
+ * Compute the SVG path string for a waypoint-based arrow.
+ * For anchored endpoints, it extends straight away by 50px before curving.
+ */
+export function getArrowPathString(points, startAnchor, endAnchor) {
+  if (!points || points.length < 2) return '';
+
+  let d = '';
+  // Move to start
+  d += `M ${points[0].x} ${points[0].y}`;
+
+  // If start is anchored, draw straight line to p0_straight
+  let p0 = points[0];
+  if (startAnchor && startAnchor.ellipse && startAnchor.ellipse.parentNode) {
+    const dir = getAnchorDir(startAnchor.anchorLabel);
+    p0 = { x: p0.x + dir.x * 50, y: p0.y + dir.y * 50 };
+    d += ` L ${p0.x} ${p0.y}`;
+  }
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const segStart = i === 0 ? p0 : points[i];
+    let segEnd = points[i + 1];
+
+    const segStartAnchor = i === 0 ? startAnchor : null;
+    const segEndAnchor = i === points.length - 2 ? endAnchor : null;
+
+    // If this is the last segment and end is anchored, segEnd is pEnd_straight
+    if (segEndAnchor && segEndAnchor.ellipse && segEndAnchor.ellipse.parentNode) {
+      const dir = getAnchorDir(segEndAnchor.anchorLabel);
+      segEnd = { x: segEnd.x + dir.x * 50, y: segEnd.y + dir.y * 50 };
+    }
+
+    const { cp1x, cp1y, cp2x, cp2y } = computeCubicControlPoints(
+      segStart.x, segStart.y, segEnd.x, segEnd.y, segStartAnchor, segEndAnchor
+    );
+
+    d += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${segEnd.x} ${segEnd.y}`;
+
+    // If this is the last segment and end is anchored, draw straight line to final end point
+    if (segEndAnchor && segEndAnchor.ellipse && segEndAnchor.ellipse.parentNode) {
+      d += ` L ${points[i + 1].x} ${points[i + 1].y}`;
+    }
+  }
+
+  return d;
+}
+
+/**
  * Build a cubic-bezier path string from the arrow's waypoints.
  * Each consecutive pair in _points becomes a cubic bezier segment.
  * Anchored endpoints use direction-away-from-center control points;
@@ -374,24 +434,7 @@ export function updateArrowPath(group) {
   const startAnchor = group._anchors?.find(a => a.end === 'start');
   const endAnchor = group._anchors?.find(a => a.end === 'end');
 
-  let d = '';
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[i];
-    const p3 = points[i + 1];
-
-    const segStartAnchor = i === 0 ? startAnchor : null;
-    const segEndAnchor = i === points.length - 2 ? endAnchor : null;
-
-    const { cp1x, cp1y, cp2x, cp2y } = computeCubicControlPoints(
-      p0.x, p0.y, p3.x, p3.y, segStartAnchor, segEndAnchor
-    );
-
-    if (i === 0) {
-      d += `M ${p0.x} ${p0.y} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p3.x} ${p3.y}`;
-    } else {
-      d += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${p3.x} ${p3.y}`;
-    }
-  }
+  const d = getArrowPathString(points, startAnchor, endAnchor);
 
   group._hitPath.setAttribute('d', d);
   group._visPath.setAttribute('d', d);

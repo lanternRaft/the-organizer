@@ -68,8 +68,8 @@ SVG `<g>` groups containing two `<path>` children: `_visPath` (visible stroke) a
 - **Waypoint-based data model**: `group._points` is an array of `{x, y}` waypoints (minimum 2)
 - **Legacy compat**: `group._x1, _y1, _x2, _y2` kept in sync with first/last waypoints
 - **Legacy offset**: `group._offset` kept for clipboard backward compatibility
-- **Path computation**: Cubic bezier curves via `computeCubicControlPoints()`
-  - Anchored endpoints: control point extends straight away from the connected shape's center
+- **Path computation**: Cubic bezier curves combined with 50px straight extensions from anchors.
+  - Anchored endpoints: the arrow starts/ends with a 50px straight line segment extending straight away from the shape (opposite direction from the anchor). The cubic bezier curve then connects the ends of these straight segments. Control points are aligned with the straight segments to ensure a C1 continuous, smooth transition.
   - Intermediate waypoints: control points at ⅓ and ⅔ of the segment for smooth flow
 - **Direction** (controlled via selection menu buttons):
   - `mono` (default): Single arrowhead at end
