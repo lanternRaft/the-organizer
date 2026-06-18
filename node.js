@@ -1,6 +1,6 @@
 // ── Node creation (small fixed-size circles, colorable, no resize) ──
 
-import { svg, selectedSet, selectedTypes } from './state.js';
+import { svg, selectedSet, selectedTypes, notifyCanvasChanged } from './state.js';
 import { getPos, darkenColor, startMultiDrag, updateAnchors, updateAnchoredArrows } from './helpers.js';
 import { selectElement, hideContextMenu } from './select.js';
 
@@ -84,6 +84,7 @@ export function createNode(x, y) {
       document.removeEventListener('mouseup', onUp);
       if (dragged) {
         circle._ignoreNextClick = true;
+        notifyCanvasChanged();
       }
     }
 
@@ -92,5 +93,6 @@ export function createNode(x, y) {
   });
 
   svg.appendChild(circle);
+  notifyCanvasChanged();
   return circle;
 }

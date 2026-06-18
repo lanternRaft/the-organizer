@@ -2,7 +2,7 @@
 // Arrows are created by clicking/dragging from an anchor point
 // to another anchor point. Arrows not anchored on both ends are discarded.
 
-import { svg, INFO, defs, selected, selectedType, currentTool, selectedSet, selectedTypes } from './state.js';
+import { svg, INFO, defs, selected, selectedType, currentTool, selectedSet, selectedTypes, notifyCanvasChanged } from './state.js';
 import {
   getPos, findOvalAt, ellipseAttrs, lineAttrs,
   getEllipseEdgePoint, updateArrowPath, setArrowAttrs,
@@ -306,6 +306,7 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
       if (dragged) {
         // Suppress the click that follows a drag to keep the selection intact
         group._ignoreNextClick = true;
+        notifyCanvasChanged();
       }
     }
 
@@ -317,5 +318,6 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
   // The selection-based floating menu appears when the element is selected.
 
   svg.appendChild(group);
+  notifyCanvasChanged();
   return group;
 }

@@ -4,7 +4,7 @@ import {
   svg, HANDLE_SIZE, handles, selected, selectedType,
   selectedSet, selectedTypes,
   INFO, selMenu, colorPalette, legendEl, legendColors, currentTool, shapeMode,
-  setSelected, clearSelected
+  setSelected, clearSelected, notifyCanvasChanged
 } from './state.js';
 
 import {
@@ -270,6 +270,7 @@ function applyColor(color) {
   }
   hideColorPalette();
   updateLegend();
+  notifyCanvasChanged();
 }
 
 function deleteSelected() {
@@ -297,6 +298,7 @@ function deleteSelected() {
     el.remove();
   }
   updateLegend();
+  notifyCanvasChanged();
 }
 
 // ── Selection menu event listeners ──────────────────────
@@ -334,6 +336,7 @@ function applyDirection(direction) {
     btn.classList.toggle('active-dir', btn.getAttribute('data-dir') === direction);
   });
   hideColorPalette();
+  notifyCanvasChanged();
 }
 
 selMenu?.querySelector('.sel-dir-none')?.addEventListener('click', (e) => {
@@ -677,6 +680,7 @@ export function updateLegend() {
       const text = label.textContent.trim();
       legendColors.get(color).customName = text || null;
       updateLegend();
+      notifyCanvasChanged();
     });
     label.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {

@@ -39,3 +39,21 @@ export function clearSelected() {
 export function isSelected(el) {
   return selectedSet.has(el);
 }
+
+// ── Canvas change notification (for auto-save) ───────────
+
+const _changeListeners = new Set();
+
+export function onCanvasChange(fn) {
+  _changeListeners.add(fn);
+}
+
+export function removeCanvasChangeListener(fn) {
+  _changeListeners.delete(fn);
+}
+
+export function notifyCanvasChanged() {
+  for (const fn of _changeListeners) {
+    try { fn(); } catch (e) { console.warn('Change listener error:', e); }
+  }
+}

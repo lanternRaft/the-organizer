@@ -39,6 +39,32 @@
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
     </svg>
   </button>
+  <!-- ── Hamburger menu ── -->
+  <button id="menu-btn" title="Menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </button>
+
+  <!-- ── Menu dropdown ── -->
+  <div id="menu-dropdown">
+    <button id="menu-clear-btn">Clear</button>
+  </div>
+
+  <!-- ── Confirmation dialog overlay ── -->
+  <div id="confirm-overlay" class="confirm-overlay">
+    <div id="confirm-dialog" class="confirm-dialog">
+      <div class="confirm-title">Clear Canvas</div>
+      <div class="confirm-msg">This will delete everything on the canvas. This cannot be undone.</div>
+      <div class="confirm-actions">
+        <button id="confirm-cancel" class="confirm-btn confirm-cancel">Cancel</button>
+        <button id="confirm-ok" class="confirm-btn confirm-ok">Clear</button>
+      </div>
+    </div>
+  </div>
+
   <div class="info" id="info">Click an element to select it</div>
 
   <!-- ── Toolbar ── -->

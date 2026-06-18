@@ -1,6 +1,6 @@
 // ── Entry point: initialises SVG defs, toolbar, and top-level event listeners ──
 
-import { svg, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, selMenu, colorPalette, setCurrentTool, shapeMode, setShapeMode } from './state.js';
+import { svg, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, selMenu, colorPalette, setCurrentTool, shapeMode, setShapeMode, notifyCanvasChanged, onCanvasChange } from './state.js';
 import { getPos, findOvalAt, findAnchorNear, getAnchorPoints, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText, showAnchors, hideAnchors, updateAnchors, wasMultiDragged, wasDragHappened, darkenColor, lightenColor, showAnchorsForEllipse, hideAnchorsForEllipse, unhighlightAllAnchors, highlightAnchorDot } from './helpers.js';
 import { deselect, selectElement, updateLegend, hideContextMenu, wasSelBoxDragged } from './select.js';
 import { createShape, showTextInput, hideTextInput } from './shape.js';
@@ -9,6 +9,7 @@ import {
   createArrow, cancelArrowPlacement, isArrowDragActive,
   startArrowDrag, updateArrowDragPreview, finishArrowDrag
 } from './arrow.js';
+import { saveToLocalStorage, loadFromLocalStorage, clearAndSave } from './storage.js';
 
 // ── SVG defs: arrowhead markers ────────────────────
 
@@ -399,6 +400,7 @@ function pasteFromClipboard() {
   }
 
   updateLegend();
+  notifyCanvasChanged();
 }
 
 // ── Keyboard shortcut ───────────────────────────────────
@@ -483,6 +485,7 @@ document.addEventListener('keydown', (e) => {
       el.remove();
     }
     updateLegend();
+    notifyCanvasChanged();
     INFO.textContent = `Deleted ${affected.length} element${affected.length > 1 ? 's' : ''}`;
     return;
   }
@@ -532,4 +535,76 @@ themeToggle.addEventListener('click', () => {
   const current = document.documentElement.getAttribute('data-theme') || 'dark';
   const next = current === 'dark' ? 'light' : 'dark';
   applyTheme(next);
+});
+
+// ── Auto-save setup + restore ─────────────────────────────
+
+onCanvasChange(() => saveToLocalStorage());
+loadFromLocalStorage();
+
+// ── Hamburger menu ──────────────────────────────────────
+
+const menuBtn = document.getElementById('menu-btn');
+const menuDropdown = document.getElementById('menu-dropdown');
+
+menuBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  menuDropdown.classList.toggle('show');
+});
+
+// Close menu on outside click
+document.addEventListener('click', (e) => {
+  if (menuDropdown && menuDropdown.contains(e.target)) return;
+  if (menuBtn && menuBtn.contains(e.target)) return;
+  menuDropdown.classList.remove('show');
+});
+
+document.addEventListener('contextmenu', () => {
+  menuDropdown.classList.remove('show');
+});
+
+// ── Clear button / confirmation dialog ────────────────────
+
+const overlay = document.getElementById('confirm-overlay');
+const dialog = document.getElementById('confirm-dialog');
+const clearBtn = document.getElementById('menu-clear-btn');
+const cancelBtn = document.getElementById('confirm-cancel');
+const okBtn = document.getElementById('confirm-ok');
+
+function showConfirmDialog() {
+  overlay.classList.add('show');
+}
+
+function hideConfirmDialog() {
+  overlay.classList.remove('show');
+}
+
+clearBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  menuDropdown.classList.remove('show');
+  showConfirmDialog();
+});
+
+cancelBtn.addEventListener('click', () => {
+  hideConfirmDialog();
+});
+
+okBtn.addEventListener('click', () => {
+  clearAndSave();
+  hideConfirmDialog();
+  INFO.textContent = 'Canvas cleared';
+});
+
+// Close overlay on backdrop click
+overlay.addEventListener('click', (e) => {
+  if (e.target === overlay) {
+    hideConfirmDialog();
+  }
+});
+
+// Close overlay on Escape
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && overlay.classList.contains('show')) {
+    hideConfirmDialog();
+  }
 });

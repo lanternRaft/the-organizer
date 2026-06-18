@@ -402,10 +402,155 @@ body.grid-enabled #grid-toggle svg {
 :root[data-theme="light"] #theme-toggle .icon-sun { opacity: 1; }
 :root[data-theme="light"] #theme-toggle .icon-moon { opacity: 0.35; }
 
+/* ── Hamburger menu button ─────────────────────── */
+#menu-btn {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  z-index: 700;
+  box-shadow: var(--shadow-sm);
+  transition: background 0.25s ease, border-color 0.25s ease,
+              color 0.25s ease, box-shadow 0.25s ease, transform 0.15s;
+  user-select: none;
+}
+#menu-btn:hover {
+  color: var(--text-primary);
+  transform: scale(1.1);
+}
+#menu-btn:active {
+  transform: scale(0.95);
+}
+#menu-btn svg {
+  width: 20px;
+  height: 20px;
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+#menu-btn:hover svg {
+  opacity: 1;
+}
+
+/* ── Menu dropdown ────────────────────────────── */
+#menu-dropdown {
+  display: none;
+  position: fixed;
+  top: 58px;
+  left: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  min-width: 140px;
+  box-shadow: var(--shadow-lg);
+  z-index: 700;
+  overflow: hidden;
+  transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+#menu-dropdown.show {
+  display: block;
+}
+#menu-dropdown button {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: sans-serif;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+#menu-dropdown button:hover {
+  background: var(--surface-hover);
+}
+
+/* ── Confirmation overlay ─────────────────────── */
+.confirm-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+}
+.confirm-overlay.show {
+  display: flex;
+}
+.confirm-dialog {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px 28px;
+  max-width: 360px;
+  width: 90%;
+  box-shadow: var(--shadow-lg);
+  font-family: sans-serif;
+  transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.confirm-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+.confirm-msg {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.confirm-btn {
+  padding: 8px 18px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: sans-serif;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.12s;
+}
+.confirm-btn:active {
+  transform: scale(0.96);
+}
+.confirm-cancel {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+.confirm-cancel:hover {
+  background: var(--border);
+}
+.confirm-ok {
+  background: #ef4444;
+  color: #ffffff;
+}
+.confirm-ok:hover {
+  background: #dc2626;
+}
+
 /* ── Transition override for elements we animate ── */
 body, svg rect, .info, #toolbar, #shape-dropdown,
 #legend, #selection-menu, #color-palette-popup,
-#theme-toggle {
+#theme-toggle, #menu-btn, #menu-dropdown,
+.confirm-dialog {
   transition: background 0.25s ease, background-color 0.25s ease,
               border-color 0.25s ease, box-shadow 0.25s ease,
               color 0.25s ease, fill 0.25s ease;

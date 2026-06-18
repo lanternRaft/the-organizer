@@ -1,6 +1,6 @@
 // ── Pure utility functions & DOM helpers ──────────────────
 
-import { svg, defs, selectedSet, selectedTypes } from './state.js';
+import { svg, defs, selectedSet, selectedTypes, notifyCanvasChanged } from './state.js';
 
 // ── Coordinate helpers ────────────────────────────────────
 
@@ -434,6 +434,7 @@ export function insertArrowWaypoint(group, x, y) {
   group._y2 = points[points.length - 1].y;
 
   updateArrowPath(group);
+  notifyCanvasChanged();
   return bestSeg + 1;
 }
 
@@ -710,6 +711,7 @@ export function setOvalText(ellipse, text) {
 
   svg.appendChild(textEl);
   ellipse._textEl = textEl;
+  notifyCanvasChanged();
 }
 
 export function updateOvalTextPosition(ellipse) {
@@ -871,6 +873,7 @@ export function startMultiDrag(e) {
       for (const snap of snapshots) {
         snap.el._ignoreNextClick = true;
       }
+      notifyCanvasChanged();
     }
   }
 

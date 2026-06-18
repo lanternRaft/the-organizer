@@ -1,7 +1,7 @@
 // ── Shape creation & text editing ─────────────────────────
 // Supports two modes: 'oval' (default) and 'circle'
 
-import { svg, selected, selectedType, selectedSet, selectedTypes, shapeMode, INFO } from './state.js';
+import { svg, selected, selectedType, selectedSet, selectedTypes, shapeMode, INFO, notifyCanvasChanged } from './state.js';
 import {
   getPos, ellipseAttrs, setOvalText, removeOvalText,
   updateOvalTextPosition, updateAnchoredArrows, updateAnchors,
@@ -196,6 +196,7 @@ export function createShape(x, y) {
         markDragHappened();
         // Suppress the click that follows a drag to keep the selection intact
         ellipse._ignoreNextClick = true;
+        notifyCanvasChanged();
       }
     }
 
@@ -207,5 +208,6 @@ export function createShape(x, y) {
   // The selection-based floating menu appears when the element is selected.
 
   svg.appendChild(ellipse);
+  notifyCanvasChanged();
   return ellipse;
 }

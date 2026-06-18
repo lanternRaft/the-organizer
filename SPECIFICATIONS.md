@@ -245,12 +245,101 @@ Centered text at the bottom of the screen showing contextual hints based on curr
 
 ---
 
-## Persistence
+## Auto-Save / Persistence
+
+The full canvas state is automatically persisted to `localStorage` under the key `organizer-canvas` on any mutation.
 
 | Setting | Key | Location |
 |---|---|---|
+| Canvas state | `organizer-canvas` | `localStorage` (JSON) |
 | Grid state | `grid` | `localStorage` |
 | Theme | `theme` | `localStorage` (dark/light) |
+
+### Save Triggers
+
+`notifyCanvasChanged()` is called after every user-initiated mutation:
+
+- Shape / node / arrow creation
+- Deletion (selection menu, keyboard Delete/Backspace)
+- Single and multi-element drag (on mouseup)
+- Color change (via palette swatch)
+- Arrow direction change (none/mono/dual)
+- Waypoint insertion (click on selected arrow path)
+- Text commit (setOvalText)
+- Legend name edit (contenteditable blur)
+- Paste from clipboard
+
+The notification is dispatched via the `onCanvasChange` / `notifyCanvasChanged` API in `state.js`. `app.js` registers a listener that calls `saveToLocalStorage()` (from `storage.js`).
+
+### Serialization Format
+
+The `serializeCanvas()` function in `storage.js` produces a JSON object:
+```json
+{
+  "elements": [
+    { "type": "ellipse", "cx", "cy", "rx", "ry", "fill", "text" },
+    { "type": "node", "cx", "cy", "fill" },
+    {
+      "type": "arrow",
+      "points": [{"x","y"}, ...],
+      "anchors": [{"end":"start"|"end","elementIndex":N,"anchorLabel":"top"|"left"|"bottom"|"right"}],
+      "direction": "mono"|"dual"|"none",
+      "color": "#hex"
+    }
+  ],
+  "legend": [["#color", {"customName":"..."}], ...]
+}
+```
+
+Anchor references use **element-index pointers** (the index of the referenced ellipse/node among non-`<defs>` children in the serialized array), so they can be reconstructed on deserialization.
+
+### Deserialization
+
+`loadFromLocalStorage()` runs on page load:
+1. Reads the JSON from `localStorage`
+2. **First pass**: creates all ellipses and nodes (arrows need ellipse DOM references)
+3. **Second pass**: creates all arrows, resolving anchor element indices to the actual DOM elements
+4. Restores arrow direction, colors, and waypoints
+5. Restores the legend (colors and custom names)
+
+### Clear Canvas
+
+The hamburger menu → **Clear** button shows a confirmation dialog (overlay with Cancel/Clear). On confirmation, `clearAndSave()` removes all canvas elements, clears the legend, and saves the empty state to `localStorage`.
+
+---
+
+## Hamburger Menu
+
+A hamburger button (`#menu-btn`) in the top-left corner toggles a dropdown (`#menu-dropdown`) with:
+
+| Item | Action |
+|---|---|
+| **Clear** | Opens the confirmation dialog to clear the canvas |
+
+The dropdown closes on outside click and on `contextmenu`.
+
+---
+
+## Confirmation Dialog
+
+A modal overlay (`#confirm-overlay` / `#confirm-dialog`) with:
+- Title: "Clear Canvas"
+- Message: "This will delete everything on the canvas. This cannot be undone."
+- Cancel button (dismisses)
+- Clear button (executes `clearAndSave()` and closes)
+
+Closable via: Cancel button, backdrop click, or Escape key.
+
+---
+
+## `storage.js` File
+
+| Export | Description |
+|---|---|
+| `serializeCanvas()` | Walks the SVG DOM and returns a plain-JSON object |
+| `saveToLocalStorage()` | Serializes + writes to `localStorage` |
+| `loadFromLocalStorage()` | Reads from `localStorage` and restores canvas state |
+| `clearAndSave()` | Removes all elements, clears legend, saves empty state |
 
 ---
 
