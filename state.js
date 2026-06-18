@@ -6,7 +6,7 @@ export const selMenu = document.getElementById('selection-menu');
 export const colorPalette = document.getElementById('color-palette-popup');
 export const legendEl = document.getElementById('legend');
 
-export let currentTool = 'select'; // 'select', 'shape', or 'arrow'
+export let currentTool = 'select'; // 'select', 'shape', or 'node'
 export let shapeMode = 'oval'; // 'oval' or 'circle'
 export let selected = null;       // Primary SVG element (for handles/drag)
 export let selectedType = null;   // 'ellipse' or 'arrow'

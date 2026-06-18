@@ -1,6 +1,6 @@
 // ── Node creation (small fixed-size circles, colorable, no resize) ──
 
-import { svg, currentTool, selectedSet, selectedTypes } from './state.js';
+import { svg, selectedSet, selectedTypes } from './state.js';
 import { getPos, darkenColor, startMultiDrag, updateAnchors, updateAnchoredArrows } from './helpers.js';
 import { selectElement, hideContextMenu } from './select.js';
 
@@ -29,8 +29,6 @@ export function createNode(x, y) {
 
   // ── Click → select the node ──────────────────────────────
   circle.addEventListener('click', (e) => {
-    // In arrow mode, don't stop propagation — let the SVG handler place the arrow
-    if (currentTool === 'arrow') return;
     // If this click follows a drag on this element, suppress it to preserve the selection set
     if (circle._ignoreNextClick) {
       circle._ignoreNextClick = false;

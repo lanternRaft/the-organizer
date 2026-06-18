@@ -1,15 +1,13 @@
 // ── Entry point: initialises SVG defs, toolbar, and top-level event listeners ──
 
 import { svg, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, selMenu, colorPalette, setCurrentTool, shapeMode, setShapeMode } from './state.js';
-import { getPos, findOvalAt, findAnchorNear, getAnchorPoints, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText, showAnchors, hideAnchors, updateAnchors, wasMultiDragged, wasDragHappened, darkenColor, lightenColor } from './helpers.js';
+import { getPos, findOvalAt, findAnchorNear, getAnchorPoints, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText, showAnchors, hideAnchors, updateAnchors, wasMultiDragged, wasDragHappened, darkenColor, lightenColor, showAnchorsForEllipse, hideAnchorsForEllipse, unhighlightAllAnchors, highlightAnchorDot } from './helpers.js';
 import { deselect, selectElement, updateLegend, hideContextMenu, wasSelBoxDragged } from './select.js';
 import { createShape, showTextInput, hideTextInput } from './shape.js';
 import { createNode, NODE_RADIUS } from './node.js';
 import {
-  createArrow, cancelArrowPlacement,
-  updateArrowPreview, showArrowStartDot,
-  getArrowStart, getArrowStartAnchor, getArrowStartLabel,
-  setArrowStart, setArrowStartAnchor, setArrowStartLabel
+  createArrow, cancelArrowPlacement, isArrowDragActive,
+  startArrowDrag, updateArrowDragPreview, finishArrowDrag
 } from './arrow.js';
 
 // ── SVG defs: arrowhead markers ────────────────────
@@ -70,7 +68,6 @@ function switchToSelectTool() {
   document.querySelector('[data-tool="select"]').classList.add('active');
   setCurrentTool('select');
   hideShapeDropdown();
-  hideAnchors();
   INFO.textContent = 'Click an element to select it';
 }
 
@@ -80,7 +77,7 @@ function showShapeDropdown() {
 
 toolBtns.forEach(btn => {
   btn.addEventListener('click', () => {
-    // Cancel any in-progress arrow placement
+    // Cancel any in-progress arrow drag
     cancelArrowPlacement();
 
     const tool = btn.getAttribute('data-tool');
@@ -115,20 +112,13 @@ toolBtns.forEach(btn => {
 
     switch (currentTool) {
       case 'select':
-        hideAnchors();
         INFO.textContent = 'Click an element to select it';
         break;
       case 'shape':
-        hideAnchors();
         INFO.textContent = 'Click the canvas to place an oval';
         break;
       case 'node':
-        hideAnchors();
         INFO.textContent = 'Click the canvas to place a node';
-        break;
-      case 'arrow':
-        showAnchors();
-        INFO.textContent = 'Click to set the arrow start point';
         break;
     }
   });
@@ -170,11 +160,8 @@ document.addEventListener('contextmenu', (e) => {
 svg.addEventListener('click', (e) => {
   const pos = getPos(e);
 
-  // For 'select' and 'shape', only handle background clicks
-  // For 'arrow', allow clicks on any element (ovals, etc.)
-  if (currentTool !== 'arrow') {
-    if (e.target !== svg) return;
-  }
+  // Only handle background clicks
+  if (e.target !== svg) return;
 
   switch (currentTool) {
     case 'select':
@@ -207,67 +194,118 @@ svg.addEventListener('click', (e) => {
       updateLegend();
       switchToSelectTool();
       break;
-
-    case 'arrow': {
-      const arrowStart = getArrowStart();
-      if (!arrowStart) {
-        // First click: snap to nearest anchor within 15px
-        const snappedStart = findAnchorNear(pos);
-        const ovalAtStart = snappedStart ? snappedStart.ellipse : null;
-        const startPos = snappedStart ? snappedStart.anchorPos : pos;
-        setArrowStart(startPos);
-        setArrowStartAnchor(ovalAtStart || null);
-        setArrowStartLabel(ovalAtStart ? snappedStart.anchorLabel : null);
-        showArrowStartDot(startPos);
-        INFO.textContent = 'Click again to place the arrow end point';
-      } else {
-        // Second click: snap to nearest anchor within 15px
-        const arrowStartAnchor = getArrowStartAnchor();
-        const arrowStartLabel = getArrowStartLabel();
-        const snappedEnd = findAnchorNear(pos);
-        const endAnchor = snappedEnd ? snappedEnd.ellipse : null;
-        const endAnchorLabel = snappedEnd ? snappedEnd.anchorLabel : null;
-        const snappedEndPos = snappedEnd ? snappedEnd.anchorPos : pos;
-
-        // Compute actual start position (on oval edge at the stored cardinal anchor)
-        let sx = arrowStart.x, sy = arrowStart.y;
-        if (arrowStartAnchor && arrowStartLabel) {
-          const { cx, cy, rx, ry } = ellipseAttrs(arrowStartAnchor);
-          const anchors = getAnchorPoints(cx, cy, rx, ry);
-          sx = anchors[arrowStartLabel].x;
-          sy = anchors[arrowStartLabel].y;
-        }
-
-        // Compute actual end position (on oval edge at the cardinal anchor)
-        let ex = snappedEndPos.x, ey = snappedEndPos.y;
-        if (endAnchor && endAnchorLabel) {
-          // Already snapped to the anchor position, just use it
-          ex = snappedEndPos.x;
-          ey = snappedEndPos.y;
-        }
-
-        createArrow(sx, sy, ex, ey, arrowStartAnchor, endAnchor, arrowStartLabel, endAnchorLabel);
-        cancelArrowPlacement();
-        updateLegend();
-        switchToSelectTool();
-      }
-      break;
-    }
   }
 });
 
-// ── Mouse move preview for arrow ────────────────────────
+// ── Anchor hover detection (show anchors on nearby shapes) ──
+
+let _lastHoveredEllipse = null;
+const ANCHOR_HOVER_RADIUS = 20;
 
 svg.addEventListener('mousemove', (e) => {
-  if (currentTool !== 'arrow' || !getArrowStart()) return;
-  // Ignore if hovering over a handle
-  if (e.target.classList.contains('resize-handle')) return;
+  // If an arrow drag is active, update the preview and skip hover
+  if (isArrowDragActive()) {
+    const pos = getPos(e);
+    updateArrowDragPreview(pos);
+    return;
+  }
+
+  // Only show anchor hover in select mode
+  if (currentTool !== 'select') {
+    // Hide anchors for previously hovered ellipse
+    if (_lastHoveredEllipse) {
+      hideAnchorsForEllipse(_lastHoveredEllipse);
+      _lastHoveredEllipse = null;
+    }
+    return;
+  }
 
   const pos = getPos(e);
-  // Snap preview end to nearest anchor within 15px
-  const snapped = findAnchorNear(pos);
-  const previewPos = snapped ? snapped.anchorPos : pos;
-  updateArrowPreview(previewPos);
+
+  // Check if we're near any anchor point
+  const near = findAnchorNear(pos, ANCHOR_HOVER_RADIUS);
+  if (near && near.ellipse && near.ellipse.parentNode) {
+    // Show anchors for the ellipse we're near
+    if (_lastHoveredEllipse && _lastHoveredEllipse !== near.ellipse) {
+      hideAnchorsForEllipse(_lastHoveredEllipse);
+    }
+    showAnchorsForEllipse(near.ellipse);
+    _lastHoveredEllipse = near.ellipse;
+
+    // Highlight the specific anchor we're hovering
+    unhighlightAllAnchors();
+    highlightAnchorDot(near.ellipse, near.anchorLabel);
+  } else {
+    // Not near any anchor — hide the previously shown anchors
+    if (_lastHoveredEllipse) {
+      hideAnchorsForEllipse(_lastHoveredEllipse);
+      _lastHoveredEllipse = null;
+      unhighlightAllAnchors();
+    }
+  }
+
+  // If hovering over an anchor dot, set cursor to grab
+  if (e.target.classList.contains('anchor-point')) {
+    e.target.style.cursor = 'grab';
+  }
+});
+
+// ── Arrow drag from anchor: intercept mousedown on anchor dots ──
+
+svg.addEventListener('mousedown', (e) => {
+  // Only in select mode
+  if (currentTool !== 'select') return;
+  if (e.button !== 0) return;
+
+  // Check if the mousedown is on an anchor dot
+  const target = e.target;
+  if (target.classList.contains('anchor-point')) {
+    e.stopPropagation();
+    e.preventDefault();
+
+    const ellipse = target._anchorEllipse;
+    const label = target._anchorLabel;
+    if (!ellipse || !ellipse.parentNode) return;
+
+    // Get the anchor position
+    const { cx, cy, rx, ry } = ellipseAttrs(ellipse);
+    const anchors = getAnchorPoints(cx, cy, rx, ry);
+    const anchorPos = anchors[label];
+    if (!anchorPos) return;
+
+    // Start the arrow drag
+    startArrowDrag(ellipse, label, anchorPos);
+
+    // If the mouse moves, we track it with the document mousemove handler
+    // If the mouse is released immediately (click on anchor without drag),
+    // we still treat it as a drag start — the mouseup handler will decide.
+
+    let dragged = false;
+
+    function onMove(me) {
+      dragged = true;
+      const p = getPos(me);
+      updateArrowDragPreview(p);
+    }
+
+    function onUp(me) {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+
+      if (dragged) {
+        // Dragged — finish the arrow creation
+        finishArrowDrag();
+      } else {
+        // Clicked without dragging — cancel
+        cancelArrowPlacement();
+        INFO.textContent = 'Click and drag from an anchor to create an arrow';
+      }
+    }
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return;
+  }
 });
 
 // ── Clipboard (in-memory) ────────────────────────────────

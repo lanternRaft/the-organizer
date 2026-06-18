@@ -14,13 +14,12 @@ A canvas-based whiteboarding tool for world building — notes, flow charts, and
 
 ## Tool Modes
 
-A toolbar at the bottom center of the screen provides 4 tool modes. After placing an element (shape or node), the app auto-switches back to **Select** mode.
+A toolbar at the bottom center of the screen provides 3 tool modes. After placing an element (shape or node), the app auto-switches back to **Select** mode.
 
 | Tool | Button Label | Behavior |
 |---|---|---|
-| Select | Select | Click/drag to select and move elements. Default mode. |
+| Select | Select | Click/drag to select and move elements. Default mode. Also used for arrow creation — see Arrow section below. |
 | Shape | Oval / Circle | Dropdown button; click to toggle between Oval and Circle. Click canvas to place the shape. |
-| Arrow | Arrow | Two-click creation: click start point, then click end point. Snap to nearest anchor within 15px. |
 | Node | Node | Click canvas to place a small fixed-size dot. |
 
 ### Shape Tool Dropdown
@@ -78,9 +77,41 @@ SVG `<g>` groups containing two `<path>` children: `_visPath` (visible stroke) a
   - `none`: No arrowheads
   - Dynamic `<marker>` elements in `<defs>`, keyed by color (e.g. `arrowhead-#3b82f6`)
 - **Waypoint insertion**: Click on a selected arrow's path to insert a new waypoint at that position
-- **Arrow preview**: During two-click placement, a dashed preview line shows the intended curve
 - **Hit testing**: Wide transparent path (`stroke-width=14`) for easier clicking
-- **Arrow start dot**: Translucent dot shows the start point during placement
+
+#### Arrow Creation (Drag from Anchor)
+
+Arrows are created by clicking and dragging from an anchor point to another anchor point. This works in **Select** mode — no separate Arrow tool is needed.
+
+**Flow:**
+1. **Hover** near a shape (within 20px of any anchor point) — the shape's 4 anchor dots appear
+2. **Hover** directly over an anchor dot — the dot highlights (larger, filled blue)
+3. **Mousedown** on an anchor dot → arrow drag begins
+   - A dashed preview line appears from the start anchor, following the cursor
+   - All shapes' anchor dots become visible
+   - The start anchor remains highlighted
+4. **Drag** the cursor — the preview line snaps to the nearest anchor within 15px
+   - The nearest anchor highlights as a valid drop target
+5. **Mouseup** over a different shape's anchor → arrow is created, anchored on both ends
+6. **Mouseup** not over a valid anchor (same shape, or empty space) → arrow is discarded
+
+**Key rules:**
+- Arrows **must** be anchored on both ends — unanchored arrows are discarded
+- You cannot connect a shape to itself (start and end must be different shapes)
+- Existing arrows can still be re-anchored via endpoint handles (drag endpoint handle to snap to a new anchor)
+
+#### Arrow Preview
+
+During drag, a dashed preview line shows the intended curve using the same cubic bezier computation as placed arrows.
+
+#### Arrow Drag State
+
+The following module-level state tracks a drag in progress in `arrow.js`:
+
+- `_arrowDragActive` — boolean, true while a drag is in progress
+- `_dragStartAnchor` — `{ ellipse, anchorLabel, anchorPos }`
+- `_dragPreviewLine` — SVG `<path>` element for the dashed preview
+- `_dragSnappedEnd` — `{ ellipse, anchorPos, anchorLabel }` or null
 
 ### Anchors
 
@@ -91,15 +122,20 @@ Every `<ellipse>` (shapes and nodes) has 4 cardinal anchor points:
 - **bottom**: `{x: cx, y: cy + ry}`
 - **right**: `{x: cx + rx, y: cy}`
 
-Anchor dots are SVG `<circle>` elements with class `anchor-point`, white fill, blue stroke, radius 4, `pointer-events: none`.
+Anchor dots are SVG `<circle>` elements with class `anchor-point`, white fill, blue stroke, radius 4. Dots have `pointer-events: auto` (interactive) and store references to their parent ellipse and anchor label via `_anchorEllipse` and `_anchorLabel` properties.
 
 **Visibility**: Anchors are shown when:
-- The Arrow tool is active
-- An arrow is in the selected set
+- The cursor is near a shape (within 20px radius `ANCHOR_HOVER_RADIUS`)
+- An arrow is in the selected set (for endpoint re-attachment via handles)
+- An arrow drag is in progress (all shapes' anchors visible)
+
+**Highlighting**: The nearest anchor to the cursor gets highlighted (radius 7, filled blue `#3b82f6`) via `highlightAnchorDot()`.
 
 **Snap**: Arrow endpoints snap to the nearest anchor within 15px radius (`ANCHOR_SNAP_RADIUS = 15`).
 
 **Endpoint attachment**: Arrow `_anchors` array stores `{ end: 'start'|'end', ellipse, anchorLabel }`. When a connected shape moves, `updateAnchoredArrows()` updates the arrow endpoint to follow.
+
+**Per-ellipse control**: Anchors are created and cached per-ellipse. Functions `showAnchorsForEllipse(el)` and `hideAnchorsForEllipse(el)` control visibility for a specific shape, while `updateAnchors()` updates positions for all cached dots.
 
 ---
 
@@ -236,6 +272,8 @@ These JavaScript properties are attached directly to SVG DOM elements and **must
 | `_visPath` | Arrow `<g>` | Visible stroke `<path>` child |
 | `_hitPath` | Arrow `<g>` | Invisible hit-test `<path>` child |
 | `_arrowGroup` | Waypoint circles | Reference to parent arrow group |
+| `_anchorEllipse` | Anchor dot `<circle>` | Parent ellipse element |
+| `_anchorLabel` | Anchor dot `<circle>` | Anchor label (`top`/`left`/`bottom`/`right`) |
 
 ---
 
@@ -246,9 +284,12 @@ These JavaScript properties are attached directly to SVG DOM elements and **must
 | `index.html` | App shell — loads CSS + scripts, contains `<svg>` root element, toolbar, legend, selection menu |
 | `style.css` | All styling — light/dark theme variables, toolbar, grid, anchors, selection menu, color palette, legend |
 | `state.js` | Shared module state — SVG root, tool mode, selection sets, color/legend data |
-| `helpers.js` | Pure utility functions — coordinate helpers, hit testing, anchor system, bezier curves, arrow path computation, text wrapping, color utilities, multi-drag |
+| `helpers.js` | Pure utility functions — coordinate helpers, hit testing, anchor system (per-ellipse visibility, highlighting), bezier curves, arrow path computation, text wrapping, color utilities, multi-drag |
 | `shape.js` | Shape creation, text editing (textarea overlay), shape drag |
 | `node.js` | Node creation (fixed 8px circle), drag |
-| `arrow.js` | Arrow creation, waypoints, preview, direction, placement state |
+| `arrow.js` | Arrow creation via drag-from-anchor, preview during drag, cancel/finish logic, waypoints, direction, createArrow function |
 | `select.js` | Selection logic, handles (resize/endpoint/waypoint), selection menu, color palette, direction buttons, legend, marquee select |
-| `app.js` | Top-level event wiring, toolbar, keyboard shortcuts, clipboard, grid toggle, theme toggle |
+| `app.js` | Top-level event wiring: toolbar, SVG click for shape/node placement, anchor hover detection (mousemove), anchor mousedown for arrow drag, keyboard shortcuts, clipboard, grid toggle, theme toggle |
+| `SPECIFICATIONS.md` | **Canonical specification** — must be kept up to date (see Rule #1) |
+| `docs/` | Documentation assets |
+| `AGENTS.md` | Agent conventions and project context |

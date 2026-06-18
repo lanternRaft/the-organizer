@@ -1,4 +1,6 @@
-// ── Arrow creation & placement preview ───────────────────
+// ── Arrow creation & drag-from-anchor system ──────────────
+// Arrows are created by clicking/dragging from an anchor point
+// to another anchor point. Arrows not anchored on both ends are discarded.
 
 import { svg, INFO, defs, selected, selectedType, currentTool, selectedSet, selectedTypes } from './state.js';
 import {
@@ -6,85 +8,140 @@ import {
   getEllipseEdgePoint, updateArrowPath, setArrowAttrs,
   calculateSignedOffset, updateAnchoredArrows,
   computeCubicControlPoints, insertArrowWaypoint,
-  startMultiDrag, applyArrowDirection
+  startMultiDrag, applyArrowDirection,
+  findAnchorNear, highlightAnchorDot, unhighlightAllAnchors,
+  showAnchorsForEllipse, hideAnchorsForEllipse
 } from './helpers.js';
 import { selectElement, showLineHandles, updateLegend, hideContextMenu } from './select.js';
 
-// Arrow placement state
-let _arrowStart = null;       // { x, y } | null
-let _arrowStartAnchor = null; // oval element | null
-let _arrowStartLabel = null;  // 'top'|'left'|'bottom'|'right' | null
-let _arrowPreviewLine = null; // SVG path element for curved preview
-let _arrowPreviewDot = null;  // SVG circle element
+// Drag-from-anchor state
+let _arrowDragActive = false;
+let _dragStartAnchor = null;   // { ellipse, anchorLabel, anchorPos }
+let _dragPreviewLine = null;   // SVG path element for preview during drag
+let _dragSnappedEnd = null;    // Currently hovered end anchor during drag
 
-export function getArrowStart() {
-  return _arrowStart;
-}
-export function getArrowStartAnchor() {
-  return _arrowStartAnchor;
-}
-export function getArrowStartLabel() {
-  return _arrowStartLabel;
+// ── Arrow drag state accessors ───────────────────────────
+
+export function isArrowDragActive() {
+  return _arrowDragActive;
 }
 
-export function setArrowStart(pos) {
-  _arrowStart = pos;
-}
-export function setArrowStartAnchor(oval) {
-  _arrowStartAnchor = oval;
-}
-export function setArrowStartLabel(label) {
-  _arrowStartLabel = label;
-}
-
-// ── Arrow placement (preview) ───────────────────────────
+// ── Cancel an in-progress arrow drag ─────────────────────
 
 export function cancelArrowPlacement() {
-  if (_arrowPreviewLine) {
-    _arrowPreviewLine.remove();
-    _arrowPreviewLine = null;
+  if (_dragPreviewLine) {
+    _dragPreviewLine.remove();
+    _dragPreviewLine = null;
   }
-  if (_arrowPreviewDot) {
-    _arrowPreviewDot.remove();
-    _arrowPreviewDot = null;
-  }
-  _arrowStart = null;
-  _arrowStartAnchor = null;
-  _arrowStartLabel = null;
+  _arrowDragActive = false;
+  _dragStartAnchor = null;
+  _dragSnappedEnd = null;
+  unhighlightAllAnchors();
 }
 
-export function updateArrowPreview(pos) {
-  if (!_arrowPreviewLine) {
-    _arrowPreviewLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    _arrowPreviewLine.setAttribute('stroke', 'rgba(59,130,246,0.4)');
-    _arrowPreviewLine.setAttribute('stroke-width', '2');
-    _arrowPreviewLine.setAttribute('stroke-dasharray', '6,4');
-    _arrowPreviewLine.setAttribute('stroke-linecap', 'round');
-    _arrowPreviewLine.setAttribute('fill', 'none');
-    _arrowPreviewLine.setAttribute('marker-end', 'url(#prev-arrowhead)');
-    svg.appendChild(_arrowPreviewLine);
+// ── Start an arrow drag from an anchor point ─────────────
+
+export function startArrowDrag(anchorEllipse, anchorLabel, anchorPos) {
+  cancelArrowPlacement();
+
+  _arrowDragActive = true;
+  _dragStartAnchor = {
+    ellipse: anchorEllipse,
+    anchorLabel: anchorLabel,
+    anchorPos: anchorPos,
+  };
+
+  // Create the preview line
+  _dragPreviewLine = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  _dragPreviewLine.setAttribute('stroke', 'rgba(59,130,246,0.4)');
+  _dragPreviewLine.setAttribute('stroke-width', '2');
+  _dragPreviewLine.setAttribute('stroke-dasharray', '6,4');
+  _dragPreviewLine.setAttribute('stroke-linecap', 'round');
+  _dragPreviewLine.setAttribute('fill', 'none');
+  _dragPreviewLine.setAttribute('marker-end', 'url(#prev-arrowhead)');
+  _dragPreviewLine.setAttribute('pointer-events', 'none');
+  svg.appendChild(_dragPreviewLine);
+
+  // Show anchors on all shapes so the user can see where to drop
+  const ellipses = svg.querySelectorAll('ellipse');
+  for (const el of ellipses) {
+    showAnchorsForEllipse(el);
   }
-  // Cubic bezier preview: start anchor direction (if any), default control points for end
-  const startAnchor = _arrowStartAnchor && _arrowStartLabel
-    ? { ellipse: _arrowStartAnchor, anchorLabel: _arrowStartLabel }
-    : null;
+
+  // Highlight the start anchor
+  highlightAnchorDot(anchorEllipse, anchorLabel);
+
+  INFO.textContent = 'Drag to another anchor point to create an arrow';
+}
+
+// ── Update the arrow drag preview ──────────────────────
+
+export function updateArrowDragPreview(pos) {
+  if (!_arrowDragActive || !_dragPreviewLine) return;
+
+  const startPos = _dragStartAnchor.anchorPos;
+
+  // Snap preview end to nearest anchor within 15px
+  const snapped = findAnchorNear(pos);
+
+  // Remove previous highlight
+  unhighlightAllAnchors();
+  // Re-highlight start anchor
+  highlightAnchorDot(_dragStartAnchor.ellipse, _dragStartAnchor.anchorLabel);
+
+  if (snapped) {
+    // Highlight the potential end anchor
+    highlightAnchorDot(snapped.ellipse, snapped.anchorLabel);
+    _dragSnappedEnd = snapped;
+  } else {
+    _dragSnappedEnd = null;
+  }
+
+  const previewPos = snapped ? snapped.anchorPos : pos;
+
+  // Compute preview curve
+  const startAnchor = {
+    ellipse: _dragStartAnchor.ellipse,
+    anchorLabel: _dragStartAnchor.anchorLabel,
+  };
+  const endAnchor = snapped ? { ellipse: snapped.ellipse, anchorLabel: snapped.anchorLabel } : null;
   const { cp1x, cp1y, cp2x, cp2y } = computeCubicControlPoints(
-    _arrowStart.x, _arrowStart.y, pos.x, pos.y, startAnchor, null
+    startPos.x, startPos.y, previewPos.x, previewPos.y,
+    { ellipse: _dragStartAnchor.ellipse, anchorLabel: _dragStartAnchor.anchorLabel },
+    endAnchor
   );
-  _arrowPreviewLine.setAttribute('d', `M ${_arrowStart.x} ${_arrowStart.y} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${pos.x} ${pos.y}`);
+  _dragPreviewLine.setAttribute('d', `M ${startPos.x} ${startPos.y} C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${previewPos.x} ${previewPos.y}`);
 }
 
-export function showArrowStartDot(pos) {
-  if (!_arrowPreviewDot) {
-    _arrowPreviewDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    _arrowPreviewDot.setAttribute('r', '5');
-    _arrowPreviewDot.setAttribute('fill', '#3b82f6');
-    _arrowPreviewDot.setAttribute('opacity', '0.7');
-    _arrowPreviewDot.setAttribute('pointer-events', 'none');
-    svg.appendChild(_arrowPreviewDot);
+// ── Finish the arrow drag (mouseup) ────────────────────
+
+export function finishArrowDrag() {
+  if (!_arrowDragActive || !_dragStartAnchor) {
+    cancelArrowPlacement();
+    return false;
   }
-  _arrowPreviewDot.setAttribute('cx', pos.x);
-  _arrowPreviewDot.setAttribute('cy', pos.y);
+
+  // If snapped to a valid end anchor (different from start), create the arrow
+  if (_dragSnappedEnd && _dragSnappedEnd.ellipse !== _dragStartAnchor.ellipse) {
+    const startPos = _dragStartAnchor.anchorPos;
+    const endPos = _dragSnappedEnd.anchorPos;
+
+    createArrow(
+      startPos.x, startPos.y,
+      endPos.x, endPos.y,
+      _dragStartAnchor.ellipse, _dragSnappedEnd.ellipse,
+      _dragStartAnchor.anchorLabel, _dragSnappedEnd.anchorLabel
+    );
+    updateLegend();
+    cancelArrowPlacement();
+    INFO.textContent = 'Arrow created';
+    return true;
+  }
+
+  // Not snapped to a valid (different) anchor — discard
+  cancelArrowPlacement();
+  INFO.textContent = 'Arrow discarded (must connect two different shapes)';
+  return false;
 }
 
 // ── Create arrow (line) ─────────────────────────────────
@@ -151,8 +208,8 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
 
   // ── Click on arrow → select OR add waypoint ────────────
   group.addEventListener('click', (e) => {
-    // In arrow mode, don't stop propagation — let the SVG handler place the arrow
-    if (currentTool === 'arrow') return;
+    // If arrow drag is active, ignore click on existing arrows
+    if (_arrowDragActive) return;
     // If this click follows a drag on this element, suppress it to preserve the selection set
     if (group._ignoreNextClick) {
       group._ignoreNextClick = false;
@@ -179,6 +236,8 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
 
   // Mousedown on an arrow → select it (if not already) and drag immediately
   group.addEventListener('mousedown', (e) => {
+    // If arrow drag is active, ignore
+    if (_arrowDragActive) return;
     // If not already selected, select it first (skip for Shift+click; let click handler handle toggling)
     if (!selectedSet.has(group)) {
       if (e.shiftKey) return;

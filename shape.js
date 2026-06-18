@@ -1,7 +1,7 @@
 // ── Shape creation & text editing ─────────────────────────
 // Supports two modes: 'oval' (default) and 'circle'
 
-import { svg, selected, selectedType, currentTool, selectedSet, selectedTypes, shapeMode, INFO } from './state.js';
+import { svg, selected, selectedType, selectedSet, selectedTypes, shapeMode, INFO } from './state.js';
 import {
   getPos, ellipseAttrs, setOvalText, removeOvalText,
   updateOvalTextPosition, updateAnchoredArrows, updateAnchors,
@@ -135,8 +135,6 @@ export function createShape(x, y) {
 
   // Click on shape → select it
   ellipse.addEventListener('click', (e) => {
-    // In arrow mode, don't stop propagation — let the SVG handler place the arrow
-    if (currentTool === 'arrow') return;
     // If the text input is showing, don't re-select (let it finish)
     if (textInput) return;
     // If this click follows a drag on this element, suppress it to preserve the selection set

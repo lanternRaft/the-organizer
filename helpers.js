@@ -224,85 +224,84 @@ export function findAnchorNear(pos, threshold = ANCHOR_SNAP_RADIUS) {
 }
 
 /**
- * Show anchor dots on all shapes at the 4 cardinal positions.
+ * Create anchor dots for a single ellipse and cache them.
+ * Dots have pointer-events: auto and store refs to their parent ellipse + label.
  */
-export function showAnchors() {
-  const ellipses = svg.querySelectorAll('ellipse');
-  if (ellipses.length === 0) {
-    hideAnchors();
-    return;
+function _createDotsForEllipse(el) {
+  if (_anchorDots.has(el)) return;
+  const { cx, cy, rx, ry } = ellipseAttrs(el);
+  const anchors = getAnchorPoints(cx, cy, rx, ry);
+  const dots = [];
+  for (const [label, pos] of Object.entries(anchors)) {
+    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    circle.setAttribute('cx', pos.x);
+    circle.setAttribute('cy', pos.y);
+    circle.setAttribute('r', ANCHOR_DOT_RADIUS);
+    circle.setAttribute('fill', '#ffffff');
+    circle.setAttribute('stroke', '#3b82f6');
+    circle.setAttribute('stroke-width', '2');
+    circle.setAttribute('class', ANCHOR_CLASS);
+    // Store references for mousedown delegation in app.js
+    circle._anchorEllipse = el;
+    circle._anchorLabel = label;
+    // Start hidden by default
+    circle.style.display = 'none';
+    svg.appendChild(circle);
+    dots.push({ label, el: circle });
   }
+  _anchorDots.set(el, dots);
+}
 
-  // If anchors already shown, add dots for new shapes and remove for deleted shapes
-  if (_anchorDots.size > 0) {
-    // Remove dots for shapes that no longer exist
-    for (const [ellipse, dots] of _anchorDots) {
-      if (!ellipse.parentNode) {
-        dots.forEach(d => d.el.remove());
-        _anchorDots.delete(ellipse);
-      }
+/**
+ * Show anchor dots for a specific ellipse (creates them if needed).
+ */
+export function showAnchorsForEllipse(el) {
+  if (!el.parentNode) return;
+  _createDotsForEllipse(el);
+  const dots = _anchorDots.get(el);
+  if (dots) {
+    for (const dot of dots) {
+      dot.el.style.display = '';
     }
-    // Add dots for new shapes
-    for (const el of ellipses) {
-      if (!_anchorDots.has(el)) {
-        const { cx, cy, rx, ry } = ellipseAttrs(el);
-        const anchors = getAnchorPoints(cx, cy, rx, ry);
-        const dots = [];
-        for (const [label, pos] of Object.entries(anchors)) {
-          const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-          circle.setAttribute('cx', pos.x);
-          circle.setAttribute('cy', pos.y);
-          circle.setAttribute('r', ANCHOR_DOT_RADIUS);
-          circle.setAttribute('fill', '#ffffff');
-          circle.setAttribute('stroke', '#3b82f6');
-          circle.setAttribute('stroke-width', '2');
-          circle.setAttribute('class', ANCHOR_CLASS);
-          circle.setAttribute('pointer-events', 'none');
-          svg.appendChild(circle);
-          dots.push({ label, el: circle });
-        }
-        _anchorDots.set(el, dots);
-      }
-    }
-    // Update positions of all existing dots
-    updateAnchors();
-    return;
-  }
-
-  // Fresh render
-  for (const el of ellipses) {
-    const { cx, cy, rx, ry } = ellipseAttrs(el);
-    const anchors = getAnchorPoints(cx, cy, rx, ry);
-    const dots = [];
-    for (const [label, pos] of Object.entries(anchors)) {
-      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      circle.setAttribute('cx', pos.x);
-      circle.setAttribute('cy', pos.y);
-      circle.setAttribute('r', ANCHOR_DOT_RADIUS);
-      circle.setAttribute('fill', '#ffffff');
-      circle.setAttribute('stroke', '#3b82f6');
-      circle.setAttribute('stroke-width', '2');
-      circle.setAttribute('class', ANCHOR_CLASS);
-      circle.setAttribute('pointer-events', 'none');
-      svg.appendChild(circle);
-      dots.push({ label, el: circle });
-    }
-    _anchorDots.set(el, dots);
   }
 }
 
 /**
- * Hide all anchor dots.
+ * Hide anchor dots for a specific ellipse (keeps them cached).
+ */
+export function hideAnchorsForEllipse(el) {
+  const dots = _anchorDots.get(el);
+  if (dots) {
+    for (const dot of dots) {
+      dot.el.style.display = 'none';
+    }
+  }
+}
+
+/**
+ * Show anchor dots on all ellipses (legacy compat).
+ */
+export function showAnchors() {
+  const ellipses = svg.querySelectorAll('ellipse');
+  for (const el of ellipses) {
+    showAnchorsForEllipse(el);
+  }
+}
+
+/**
+ * Hide all anchor dots (legacy compat).
  */
 export function hideAnchors() {
-  for (const dots of _anchorDots.values()) {
-    dots.forEach(d => d.el.remove());
+  for (const [ellipse, dots] of _anchorDots) {
+    for (const dot of dots) {
+      dot.el.remove();
+    }
   }
   _anchorDots.clear();
 }
 
 /**
- * Update anchor dot positions (call after shapes are moved/resized).
+ * Update anchor dot positions for all cached ellipses (call after shapes are moved/resized).
  */
 export function updateAnchors() {
   for (const [ellipse, dots] of _anchorDots) {
@@ -318,6 +317,35 @@ export function updateAnchors() {
       const pos = anchors[dot.label];
       dot.el.setAttribute('cx', pos.x);
       dot.el.setAttribute('cy', pos.y);
+    }
+  }
+}
+
+/**
+ * Highlight a specific anchor dot by making it larger and filled.
+ * Returns the dot element or null.
+ */
+export function highlightAnchorDot(ellipse, label) {
+  const dots = _anchorDots.get(ellipse);
+  if (!dots) return null;
+  for (const dot of dots) {
+    if (dot.label === label) {
+      dot.el.setAttribute('r', ANCHOR_DOT_RADIUS + 3);
+      dot.el.setAttribute('fill', '#3b82f6');
+      return dot.el;
+    }
+  }
+  return null;
+}
+
+/**
+ * Unhighlight all anchor dots (reset to default appearance).
+ */
+export function unhighlightAllAnchors() {
+  for (const dots of _anchorDots.values()) {
+    for (const dot of dots) {
+      dot.el.setAttribute('r', ANCHOR_DOT_RADIUS);
+      dot.el.setAttribute('fill', '#ffffff');
     }
   }
 }

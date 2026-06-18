@@ -21,15 +21,16 @@ import {
 
 /**
  * Update anchor visibility based on current state.
- * Anchors visible when:
- * - arrow tool is active, OR
- * - any arrow is in the selected set
+ * Anchors are shown when any arrow is in the selected set
+ * (for endpoint re-attachment via handles).
  */
 function updateAnchorVisibility() {
   const hasArrowSelected = [...selectedTypes.values()].includes('arrow');
-  if (currentTool === 'arrow' || hasArrowSelected) {
+  if (hasArrowSelected) {
     showAnchors();
   } else {
+    // Don't hide all anchors — they may be showing due to hover
+    // Only hide if no arrow is selected
     hideAnchors();
   }
 }
@@ -156,9 +157,6 @@ export function deselect() {
       break;
     case 'node':
       INFO.textContent = 'Click the canvas to place a node';
-      break;
-    case 'arrow':
-      INFO.textContent = 'Click to set the arrow start point';
       break;
   }
 }
