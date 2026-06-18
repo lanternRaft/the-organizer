@@ -390,7 +390,7 @@ function createHandle(x, y, cursor, onDrag, onDragEnd) {
     function onUp() {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
-      if (onDragEnd) onDragEnd();
+      notifyCanvasChanged();
     }
 
     document.addEventListener('mousemove', onMove);
@@ -460,6 +460,7 @@ export function showLineHandles(el) {
         updateArrowPath(el);
         showLineHandles(el);
       }
+      notifyCanvasChanged();
     });
 
     createHandle(x2, y2, 'grab', (pos) => {
@@ -479,6 +480,7 @@ export function showLineHandles(el) {
         updateArrowPath(el);
         showLineHandles(el);
       }
+      notifyCanvasChanged();
     });
 
     // Midpoint circle handle for legacy offset-based curving
