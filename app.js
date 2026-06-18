@@ -461,6 +461,26 @@ document.addEventListener('contextmenu', (e) => {
   hideContextMenu();
 });
 
+// ── Grid toggle ──────────────────────────────────────────
+
+const gridToggle = document.getElementById('grid-toggle');
+
+function applyGrid(enabled) {
+  document.body.classList.toggle('grid-enabled', enabled);
+  localStorage.setItem('grid', enabled ? 'on' : 'off');
+}
+
+// Restore grid state on load
+const savedGrid = localStorage.getItem('grid');
+if (savedGrid === 'on') {
+  applyGrid(true);
+}
+
+gridToggle.addEventListener('click', () => {
+  const enabled = !document.body.classList.contains('grid-enabled');
+  applyGrid(enabled);
+});
+
 // ── Theme toggle (dark / light) ───────────────────────────
 
 const themeToggle = document.getElementById('theme-toggle');
