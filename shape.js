@@ -5,7 +5,7 @@ import { svg, selected, selectedType, selectedSet, selectedTypes, shapeMode, INF
 import {
   getPos, ellipseAttrs, setOvalText, removeOvalText,
   updateOvalTextPosition, updateAnchoredArrows, updateAnchors,
-  startMultiDrag, markDragHappened, darkenColor
+  startMultiDrag, markDragHappened, darkenColor, snapToGrid
 } from './helpers.js';
 import { selectElement, deselect, showEllipseHandles, updateLegend, setHideTextInput, hideContextMenu } from './select.js';
 
@@ -181,8 +181,8 @@ export function createShape(x, y) {
       const pos = getPos(me);
       const dx = pos.x - startPos.x;
       const dy = pos.y - startPos.y;
-      ellipse.setAttribute('cx', startCx + dx);
-      ellipse.setAttribute('cy', startCy + dy);
+      ellipse.setAttribute('cx', snapToGrid(startCx + dx));
+      ellipse.setAttribute('cy', snapToGrid(startCy + dy));
       showEllipseHandles(ellipse);
       updateAnchoredArrows(ellipse);
       updateAnchors();

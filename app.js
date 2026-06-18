@@ -1,7 +1,7 @@
 // ── Entry point: initialises SVG defs, toolbar, and top-level event listeners ──
 
 import { svg, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, selMenu, colorPalette, setCurrentTool, shapeMode, setShapeMode, notifyCanvasChanged, onCanvasChange } from './state.js';
-import { getPos, findOvalAt, findAnchorNear, getAnchorPoints, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText, showAnchors, hideAnchors, updateAnchors, wasMultiDragged, wasDragHappened, darkenColor, lightenColor, showAnchorsForEllipse, hideAnchorsForEllipse, unhighlightAllAnchors, highlightAnchorDot } from './helpers.js';
+import { getPos, findOvalAt, findAnchorNear, getAnchorPoints, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText, showAnchors, hideAnchors, updateAnchors, wasMultiDragged, wasDragHappened, darkenColor, lightenColor, showAnchorsForEllipse, hideAnchorsForEllipse, unhighlightAllAnchors, highlightAnchorDot, snapToGrid } from './helpers.js';
 import { deselect, selectElement, updateLegend, hideContextMenu, wasSelBoxDragged } from './select.js';
 import { createShape, showTextInput, hideTextInput } from './shape.js';
 import { createNode, NODE_RADIUS } from './node.js';
@@ -184,14 +184,14 @@ svg.addEventListener('click', (e) => {
 
     case 'shape':
       deselect();
-      createShape(pos.x, pos.y);
+      createShape(snapToGrid(pos.x), snapToGrid(pos.y));
       updateLegend();
       switchToSelectTool();
       break;
 
     case 'node':
       deselect();
-      createNode(pos.x, pos.y);
+      createNode(snapToGrid(pos.x), snapToGrid(pos.y));
       updateLegend();
       switchToSelectTool();
       break;
@@ -355,7 +355,7 @@ function pasteFromClipboard() {
 
   for (const data of _clipboard) {
     if (data.type === 'ellipse') {
-      const el = createShape(data.cx + offset, data.cy + offset);
+      const el = createShape(snapToGrid(data.cx + offset), snapToGrid(data.cy + offset));
       el.setAttribute('rx', data.rx);
       el.setAttribute('ry', data.ry);
       el.setAttribute('fill', data.fill || '#3b82f6');
@@ -381,7 +381,7 @@ function pasteFromClipboard() {
       }
       newElements.push(el);
     } else if (data.type === 'node') {
-      const el = createNode(data.cx + offset, data.cy + offset);
+      const el = createNode(snapToGrid(data.cx + offset), snapToGrid(data.cy + offset));
       if (data.fill) {
         el.setAttribute('fill', data.fill);
         el.setAttribute('stroke', darkenColor(data.fill, 40));

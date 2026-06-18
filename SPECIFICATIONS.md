@@ -39,9 +39,11 @@ SVG `<ellipse>` elements that serve as labeled containers.
   - **Circle**: Default size `rx=40`, `ry=40`
 - **Colorable**: Default fill `#3b82f6`
 - **Opacity**: 0.9
-- **Resize**: 4 corner handles (white squares) appear on selection; drag to resize
+- **Resize**: 4 corner handles (white squares) appear on selection; drag to resize (snaps to 10px increments)
   - In Circle mode, handles constrain to equal `rx`/`ry` (distance from center)
   - In Oval mode, handles allow independent `rx`/`ry`
+- **Drag to move**: Snaps to 10px increments
+- **Placement**: Initial placement via click snaps to 10px increments
 - **Stroke**: Darkened version of fill color (40% darker by default) at `stroke-width=2`; on selection, lightened version (40% lighter) at `stroke-width=3`
 - **Text**:
   - Press **Enter** on a selected shape to open an inline `<textarea>` centered over the shape
@@ -59,7 +61,8 @@ Small fixed-size colorable dots. Implemented as `<ellipse>` elements with `rx=ry
 - **Colorable**: Default fill `#3b82f6`
 - **No resize handles** on selection
 - **Stroke**: Same rules as shapes (darkened/lightened fill)
-- **Drag to move**
+- **Drag to move**: Snaps to 10px increments
+- **Placement**: Initial placement via click snaps to 10px increments
 
 ### Arrows
 
@@ -160,7 +163,7 @@ Drag on the empty canvas background (Select tool only) to draw a dashed selectio
 ### Multi-Drag
 
 When multiple elements are selected, dragging any one moves all of them:
-- Shapes/nodes: Offsets their `cx`/`cy` by the drag delta
+- Shapes/nodes: Offsets their `cx`/`cy` by the drag delta, snapping to 10px increments
 - Arrows: Updates anchored endpoints to follow connected nodes; moves free-floating waypoints by the delta
 - Anchor dots update in real-time
 - A `_ignoreNextClick` flag on dragged elements suppresses the click that follows a drag, preserving the selection

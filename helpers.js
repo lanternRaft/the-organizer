@@ -9,6 +9,11 @@ export function getPos(e) {
   return { x: e.clientX - r.left, y: e.clientY - r.top };
 }
 
+export const GRID_SNAP = 10;
+export function snapToGrid(val) {
+  return Math.round(val / GRID_SNAP) * GRID_SNAP;
+}
+
 export function ellipseAttrs(el) {
   return {
     cx: parseFloat(el.getAttribute('cx')),
@@ -854,8 +859,8 @@ export function startMultiDrag(e) {
     // First pass: move all ellipses/nodes
     for (const snap of snapshots) {
       if (snap.type === 'ellipse' || snap.type === 'node') {
-        snap.el.setAttribute('cx', snap.cx + dx);
-        snap.el.setAttribute('cy', snap.cy + dy);
+        snap.el.setAttribute('cx', snapToGrid(snap.cx + dx));
+        snap.el.setAttribute('cy', snapToGrid(snap.cy + dy));
         if (snap.type === 'ellipse') {
           updateOvalTextPosition(snap.el);
         }

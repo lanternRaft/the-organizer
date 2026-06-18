@@ -14,7 +14,7 @@ import {
   updateOvalTextPosition, updateAnchoredArrows,
   calculateSignedOffset,
   showAnchors, hideAnchors, updateAnchors,
-  darkenColor, lightenColor
+  darkenColor, lightenColor, snapToGrid
 } from './helpers.js';
 
 // ── Selection ────────────────────────────────────────────
@@ -416,12 +416,12 @@ export function showEllipseHandles(el) {
       const { cx, cy } = ellipseAttrs(el);
       if (shapeMode === 'circle') {
         const dist = Math.sqrt((pos.x - cx) ** 2 + (pos.y - cy) ** 2);
-        const newR = Math.max(10, dist);
+        const newR = Math.max(10, snapToGrid(dist));
         el.setAttribute('rx', newR);
         el.setAttribute('ry', newR);
       } else {
-        const newRx = Math.max(10, Math.abs(pos.x - cx));
-        const newRy = Math.max(10, Math.abs(pos.y - cy));
+        const newRx = Math.max(10, snapToGrid(Math.abs(pos.x - cx)));
+        const newRy = Math.max(10, snapToGrid(Math.abs(pos.y - cy)));
         el.setAttribute('rx', newRx);
         el.setAttribute('ry', newRy);
       }
