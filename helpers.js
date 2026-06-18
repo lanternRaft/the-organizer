@@ -397,52 +397,99 @@ function getAnchorDir(label) {
 }
 
 /**
- * Compute the SVG path string for a waypoint-based arrow.
- * For anchored endpoints, the straight-line extension uses ARROWHEAD_ANCHOR_EXT (40px).
- * The path ends exactly at the ellipse edge; the end-marker tip (at refX=ARROWHEAD_WIDTH)
- * overlaps the endpoint so there is no gap between the arrowhead tip and the shape.
+ * Compute the SVG path string for a waypoint-based arrow using Catmull-Rom
+ * tangents so curves flow smoothly through every intermediate waypoint (C1
+ * continuity — no sharp kinks).
+ *
+ * Algorithm:
+ *  1. Build a "nodes" array of the points the bezier actually passes through.
+ *     Anchored endpoints are replaced by an extension point (ARROWHEAD_ANCHOR_EXT px
+ *     outward) so the curve exits/enters shapes orthogonally.
+ *  2. Compute a unit tangent at every node:
+ *     • Anchored start/end: the anchor's outward cardinal direction.
+ *     • First/last unanchored: direction along the first/last segment.
+ *     • Intermediate nodes: Catmull-Rom — normalize(next − prev).
+ *  3. For each segment i→i+1, the control points are:
+ *     cp1 = node[i]   + tangent[i]   * dist   (outgoing)
+ *     cp2 = node[i+1] − tangent[i+1] * dist   (incoming)
+ *  4. Anchored endpoints re-attach the straight L segment to the actual
+ *     ellipse edge so the arrowhead tip lands exactly on the shape.
  */
 export function getArrowPathString(points, startAnchor, endAnchor) {
   if (!points || points.length < 2) return '';
 
-  let d = '';
-  // Move to start
-  d += `M ${points[0].x} ${points[0].y}`;
+  const hasStartAnchor = !!(startAnchor?.ellipse?.parentNode);
+  const hasEndAnchor   = !!(endAnchor?.ellipse?.parentNode);
 
-  // If start is anchored, draw straight line to p0_straight
-  let p0 = points[0];
-  if (startAnchor && startAnchor.ellipse && startAnchor.ellipse.parentNode) {
+  // ── Build nodes: the points the cubic bezier passes through ──────────
+  // Anchored endpoints are replaced by their outward extension.
+  const pFirst = points[0];
+  const pLast  = points[points.length - 1];
+
+  let startExt = null;
+  if (hasStartAnchor) {
     const dir = getAnchorDir(startAnchor.anchorLabel);
-    p0 = { x: p0.x + dir.x * ARROWHEAD_ANCHOR_EXT, y: p0.y + dir.y * ARROWHEAD_ANCHOR_EXT };
-    d += ` L ${p0.x} ${p0.y}`;
+    startExt = { x: pFirst.x + dir.x * ARROWHEAD_ANCHOR_EXT, y: pFirst.y + dir.y * ARROWHEAD_ANCHOR_EXT };
+  }
+  let endExt = null;
+  if (hasEndAnchor) {
+    const dir = getAnchorDir(endAnchor.anchorLabel);
+    endExt = { x: pLast.x + dir.x * ARROWHEAD_ANCHOR_EXT, y: pLast.y + dir.y * ARROWHEAD_ANCHOR_EXT };
   }
 
-  for (let i = 0; i < points.length - 1; i++) {
-    const segStart = i === 0 ? p0 : points[i];
-    let segEnd = points[i + 1];
+  const nodes = [];
+  nodes.push(startExt ?? pFirst);
+  for (let i = 1; i < points.length - 1; i++) nodes.push(points[i]);
+  nodes.push(endExt ?? pLast);
 
-    const segStartAnchor = i === 0 ? startAnchor : null;
-    const segEndAnchor = i === points.length - 2 ? endAnchor : null;
-
-    // If this is the last segment and end is anchored, extend segEnd by ARROWHEAD_ANCHOR_EXT.
-    // The end-marker (tip at x=0, refX=0) is placed at that endpoint — its tip sits
-    // exactly at the ellipse edge and its body trails back along the last straight segment.
-    if (segEndAnchor && segEndAnchor.ellipse && segEndAnchor.ellipse.parentNode) {
-      const dir = getAnchorDir(segEndAnchor.anchorLabel);
-      segEnd = { x: segEnd.x + dir.x * ARROWHEAD_ANCHOR_EXT, y: segEnd.y + dir.y * ARROWHEAD_ANCHOR_EXT };
+  // ── Compute Catmull-Rom unit tangents at every node ───────────────────
+  const tangents = nodes.map((_, i) => {
+    if (i === 0) {
+      // Anchored start: outward cardinal direction
+      if (hasStartAnchor) return getAnchorDir(startAnchor.anchorLabel);
+      // Unanchored: direction toward next node
+      const dx = nodes[1].x - nodes[0].x, dy = nodes[1].y - nodes[0].y;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      return { x: dx / len, y: dy / len };
     }
-
-    const { cp1x, cp1y, cp2x, cp2y } = computeCubicControlPoints(
-      segStart.x, segStart.y, segEnd.x, segEnd.y, segStartAnchor, segEndAnchor
-    );
-
-    d += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${segEnd.x} ${segEnd.y}`;
-
-    // If this is the last segment and end is anchored, draw straight line to final end point
-    if (segEndAnchor && segEndAnchor.ellipse && segEndAnchor.ellipse.parentNode) {
-      d += ` L ${points[i + 1].x} ${points[i + 1].y}`;
+    if (i === nodes.length - 1) {
+      // Anchored end: outward cardinal direction (curve approaches from outside)
+      if (hasEndAnchor) return getAnchorDir(endAnchor.anchorLabel);
+      // Unanchored: direction from previous node
+      const dx = nodes[i].x - nodes[i - 1].x, dy = nodes[i].y - nodes[i - 1].y;
+      const len = Math.sqrt(dx * dx + dy * dy) || 1;
+      return { x: dx / len, y: dy / len };
     }
+    // Intermediate: Catmull-Rom tangent — direction from prev to next
+    const dx = nodes[i + 1].x - nodes[i - 1].x, dy = nodes[i + 1].y - nodes[i - 1].y;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    return { x: dx / len, y: dy / len };
+  });
+
+  // ── Assemble the SVG path ─────────────────────────────────────────────
+  let d = `M ${pFirst.x} ${pFirst.y}`;
+  if (startExt) d += ` L ${startExt.x} ${startExt.y}`;
+
+  for (let i = 0; i < nodes.length - 1; i++) {
+    const n1 = nodes[i];
+    const n2 = nodes[i + 1];
+    const dx = n2.x - n1.x, dy = n2.y - n1.y;
+    const segLen = Math.sqrt(dx * dx + dy * dy);
+    // Control-point reach: at least 30px, at most 100px, proportional to segment length
+    const dist = Math.max(30, Math.min(100, segLen * 0.35));
+
+    const t1 = tangents[i];
+    const t2 = tangents[i + 1];
+    const cp1x = n1.x + t1.x * dist;
+    const cp1y = n1.y + t1.y * dist;
+    const cp2x = n2.x - t2.x * dist;
+    const cp2y = n2.y - t2.y * dist;
+
+    d += ` C ${cp1x} ${cp1y} ${cp2x} ${cp2y} ${n2.x} ${n2.y}`;
   }
+
+  // Re-attach straight line back to the actual ellipse edge for anchored end
+  if (endExt) d += ` L ${pLast.x} ${pLast.y}`;
 
   return d;
 }

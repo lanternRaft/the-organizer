@@ -71,15 +71,16 @@ SVG `<g>` groups containing two `<path>` children: `_visPath` (visible stroke) a
 - **Waypoint-based data model**: `group._points` is an array of `{x, y}` waypoints (minimum 2)
 - **Legacy compat**: `group._x1, _y1, _x2, _y2` kept in sync with first/last waypoints
 - **Legacy offset**: `group._offset` kept for clipboard backward compatibility
-- **Path computation**: Cubic bezier curves combined with `ARROWHEAD_ANCHOR_EXT=40px` straight extensions from anchors. The path draws to the exact ellipse edge; the end-marker tip (at `refX=ARROWHEAD_WIDTH`) is placed at that endpoint so there is zero gap between the arrowhead tip and the shape.
-  - Anchored endpoints: the arrow extends 40px straight out from each anchor before curving. The cubic bezier curve connects the extended points. Control points are aligned with the straight segments to ensure a C1 continuous, smooth transition.
-  - Intermediate waypoints: control points at ⅓ and ⅔ of the segment for smooth flow
+- **Path computation**: Cubic bezier curves using **Catmull-Rom tangents** for C1 continuity through every waypoint, combined with `ARROWHEAD_ANCHOR_EXT=40px` straight extensions from anchors. The path draws to the exact ellipse edge; the end-marker tip (at `refX=ARROWHEAD_WIDTH`) is placed at that endpoint so there is zero gap between the arrowhead tip and the shape.
+  - Anchored endpoints: the arrow extends 40px straight out from each anchor before curving. The cardinal direction of the anchor is used as the tangent at that node.
+  - Intermediate waypoints: the tangent at node *i* is `normalize(nodes[i+1] − nodes[i−1])` (Catmull-Rom). Both the outgoing control point of segment *i→i+1* and the incoming control point of *i−1→i* align with this same tangent, guaranteeing smooth curves with no kinks.
+  - Control-point reach: `clamp(segLen × 0.35, 30, 100)` px along the tangent direction.
 - **Direction** (controlled via selection menu buttons):
   - `mono` (default): Single arrowhead at end
   - `dual`: Arrowheads at both start and end
   - `none`: No arrowheads
   - Dynamic `<marker>` elements in `<defs>`, keyed by color (e.g. `arrowhead-#3b82f6`) with dimensions 9.6×6.4 (20% smaller than original 12×8). End marker uses a classic arrowhead polygon (tip at `refX`, base trailing back) so the tip touches the path endpoint with no gap.
-- **Waypoint insertion**: Click on a selected arrow's path to insert a new waypoint at that position
+- **Waypoint insertion**: With an arrow selected (sole selection), clicking or dragging anywhere on the path body immediately inserts a new waypoint at that position and enters a drag loop so the user can "grab and pull" the curve into shape in one gesture. If released without moving, the waypoint stays at the click location. Clicking or dragging on an existing handle moves that handle and does not insert a new waypoint (handles consume the `mousedown` via `stopPropagation`).
 - **Hit testing**: Wide transparent path (`stroke-width=14`) for easier clicking
 
 #### Arrow Creation (Drag from Anchor)
@@ -276,7 +277,7 @@ The full canvas state is automatically persisted to `localStorage` under the key
 - Single and multi-element drag (on mouseup)
 - Color change (via palette swatch)
 - Arrow direction change (none/mono/dual)
-- Waypoint insertion (click on selected arrow path)
+- Waypoint insertion/drag (drag on selected arrow path body)
 - Text commit (setOvalText)
 - Legend name edit (contenteditable blur)
 - Paste from clipboard

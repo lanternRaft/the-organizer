@@ -6,7 +6,7 @@ import { svg, INFO, defs, selected, selectedType, currentTool, selectedSet, sele
 import {
   getPos, findOvalAt, ellipseAttrs, lineAttrs,
   getEllipseEdgePoint, updateArrowPath, setArrowAttrs,
-  calculateSignedOffset, updateAnchoredArrows,
+  calculateSignedOffset,
   getArrowPathString, insertArrowWaypoint,
   startMultiDrag, applyArrowDirection,
   findAnchorNear, highlightAnchorDot, unhighlightAllAnchors,
@@ -202,7 +202,7 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
   updateArrowPath(group);
   applyArrowDirection(group);
 
-  // ── Click on arrow → select OR add waypoint ────────────
+  // ── Click on arrow → select (waypoint insertion is now drag-based) ──
   group.addEventListener('click', (e) => {
     // If arrow drag is active, ignore click on existing arrows
     if (_arrowDragActive) return;
@@ -214,32 +214,34 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
     }
     e.stopPropagation();
 
-    // Check if the click was on an existing waypoint handle (don't insert there)
+    // Waypoint handle clicks are handled by the handle's own mousedown; nothing to do here
     if (e.target.classList.contains('waypoint-handle')) return;
 
-    // If the arrow is already selected and this is a single-selection,
-    // clicking on the path inserts a new waypoint at the click position.
-    if (selectedSet.has(group) && selectedSet.size === 1) {
-      const pos = getPos(e);
-      insertArrowWaypoint(group, pos.x, pos.y);
-      showLineHandles(group);
-      return;
-    }
-
-    // Regular click: select the arrow
+    // Regular click: select the arrow (waypoint insertion happens on drag, not plain click)
     selectElement(group, 'arrow', e.shiftKey);
   });
 
-  // Mousedown on an arrow → select it (if not already) and drag immediately
+  // ── Mousedown on an arrow ────────────────────────────────────────────
+  // • Unselected arrow: select it, then fall through into drag/waypoint logic
+  // • Selected arrow, multi-select: move all selected elements together
+  // • Selected arrow, sole selection, click on path body: insert a waypoint
+  //   at the click position and immediately begin dragging it so the user
+  //   can "pull" the curve into shape in one gesture.
+  // • Selected arrow, sole selection, click on a handle: let the handle's
+  //   own mousedown take over (stopPropagation on the handle prevents us
+  //   from seeing that event here).
   group.addEventListener('mousedown', (e) => {
     // If arrow drag is active, ignore
     if (_arrowDragActive) return;
+
     // If not already selected, select it first (skip for Shift+click; let click handler handle toggling)
     if (!selectedSet.has(group)) {
       if (e.shiftKey) return;
       selectElement(group, 'arrow', false);
       // Suppress the click that follows to avoid re-running selectElement
       group._ignoreNextClick = true;
+      // First click just selects — don't insert a waypoint yet
+      return;
     }
     if (selectedTypes.get(group) !== 'arrow') return;
     e.stopPropagation();
@@ -252,45 +254,39 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
       return;
     }
 
-    const startPos = getPos(e);
-    const points = group._points;
-    // Snapshot all waypoint positions before drag starts
-    const startPoints = points.map(p => ({ x: p.x, y: p.y }));
+    // ── Single selected arrow ─────────────────────────────────────────
+    // If the user clicked on a waypoint handle or endpoint handle, the
+    // handle's own mousedown (stopPropagation) stops the event from
+    // reaching us, so we only arrive here when clicking on the path body.
+    //
+    // Behaviour: insert a waypoint at the click position and immediately
+    // start dragging it. This lets users "grab and pull" the arrow to add
+    // curves in one fluid gesture. If the user releases without moving
+    // (pure click), the waypoint is left in place at the click spot.
+
+    const clickPos = getPos(e);
+
+    // Insert the new waypoint and get its index in _points
+    const newIdx = insertArrowWaypoint(group, clickPos.x, clickPos.y);
+    if (newIdx < 0) return; // insertion failed (degenerate arrow)
+
+    showLineHandles(group);
+
+    const pt = group._points[newIdx];
     let dragged = false;
 
     function onMove(me) {
       dragged = true;
       hideContextMenu();
       const pos = getPos(me);
-      const dx = pos.x - startPos.x;
-      const dy = pos.y - startPos.y;
+      pt.x = pos.x;
+      pt.y = pos.y;
 
-      // Shift ALL waypoints by the drag delta
-      for (let i = 0; i < points.length; i++) {
-        points[i].x = startPoints[i].x + dx;
-        points[i].y = startPoints[i].y + dy;
-      }
-
-      // Keep _x1/_y1/_x2/_y2 in sync for backward compat
-      group._x1 = points[0].x;
-      group._y1 = points[0].y;
-      group._x2 = points[points.length - 1].x;
-      group._y2 = points[points.length - 1].y;
-
-      // Re-snap anchored endpoints back to their connected nodes
-      // so the arrow stays attached at both ends
-      if (group._anchors && group._anchors.length > 0) {
-        for (const anchor of group._anchors) {
-          if (anchor.ellipse && anchor.ellipse.parentNode) {
-            updateAnchoredArrows(anchor.ellipse);
-          }
-        }
-        // Re-sync _points[0] and _points[last] after anchoring
-        points[0].x = group._x1;
-        points[0].y = group._y1;
-        points[points.length - 1].x = group._x2;
-        points[points.length - 1].y = group._y2;
-      }
+      // Keep legacy shorthands in sync
+      group._x1 = group._points[0].x;
+      group._y1 = group._points[0].y;
+      group._x2 = group._points[group._points.length - 1].x;
+      group._y2 = group._points[group._points.length - 1].y;
 
       updateArrowPath(group);
       showLineHandles(group);
@@ -299,11 +295,9 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
     function onUp() {
       document.removeEventListener('mousemove', onMove);
       document.removeEventListener('mouseup', onUp);
-      if (dragged) {
-        // Suppress the click that follows a drag to keep the selection intact
-        group._ignoreNextClick = true;
-        notifyCanvasChanged();
-      }
+      // Suppress the following click event so it doesn't re-select or deselect
+      group._ignoreNextClick = true;
+      notifyCanvasChanged();
     }
 
     document.addEventListener('mousemove', onMove);

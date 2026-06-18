@@ -105,7 +105,7 @@ export function selectElement(el, type, additive = false) {
       el._visPath.setAttribute('stroke', '#fbbf24');
       el._visPath.setAttribute('stroke-width', '3');
       showLineHandles(el);
-      INFO.textContent = 'Drag handles to move; Shift+click the path to add curve points';
+      INFO.textContent = 'Drag handles to move endpoints; drag the path to add a new bend point';
     }
     updateAnchorVisibility();
   }
