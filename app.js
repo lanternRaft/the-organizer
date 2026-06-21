@@ -1,6 +1,6 @@
 // ── Entry point: initialises SVG defs, toolbar, and top-level event listeners ──
 
-import { svg, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, selMenu, colorPalette, setCurrentTool, shapeMode, setShapeMode, notifyCanvasChanged, onCanvasChange, initCanvasSize, viewBox, setViewBox, resetViewBox, canvasWidth, canvasHeight, getZoomLevel } from './state.js';
+import { svg, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, selMenu, colorPalette, setCurrentTool, shapeMode, setShapeMode, nodeMode, setNodeMode, notifyCanvasChanged, onCanvasChange, initCanvasSize, viewBox, setViewBox, resetViewBox, canvasWidth, canvasHeight, getZoomLevel } from './state.js';
 import { getPos, findOvalAt, findAnchorNear, getAnchorPoints, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText, showAnchors, hideAnchors, updateAnchors, wasMultiDragged, wasDragHappened, darkenColor, lightenColor, showAnchorsForEllipse, hideAnchorsForEllipse, unhighlightAllAnchors, highlightAnchorDot, snapToGrid } from './helpers.js';
 import { deselect, selectElement, updateLegend, hideContextMenu, wasSelBoxDragged } from './select.js';
 import { createShape, showTextInput, hideTextInput } from './shape.js';
@@ -52,6 +52,30 @@ const shapeLabel = document.getElementById('shape-label');
 const shapeOptions = shapeDropdown.querySelectorAll('.shape-option');
 const shapeToolWrap = document.getElementById('shape-tool-wrap');
 
+// ── Node dropdown ────────────────────────────────────────
+
+const nodeDropdown = document.getElementById('node-dropdown');
+const nodeLabel = document.getElementById('node-label');
+const nodeOptions = nodeDropdown.querySelectorAll('.node-option');
+const nodeToolWrap = document.getElementById('node-tool-wrap');
+
+function updateNodeLabel() {
+  nodeLabel.textContent = nodeMode === 'circle' ? 'Circle' : 'Triangle';
+  nodeOptions.forEach(opt => {
+    opt.classList.toggle('active-mode', opt.getAttribute('data-mode') === nodeMode);
+  });
+}
+updateNodeLabel();
+
+function hideNodeDropdown() {
+  nodeDropdown.classList.remove('show');
+}
+
+function showNodeDropdown() {
+  nodeDropdown.classList.add('show');
+}
+
+
 function updateShapeLabel() {
   shapeLabel.textContent = shapeMode === 'circle' ? 'Circle' : 'Oval';
   shapeOptions.forEach(opt => {
@@ -69,6 +93,7 @@ function switchToSelectTool() {
   document.querySelector('[data-tool="select"]').classList.add('active');
   setCurrentTool('select');
   hideShapeDropdown();
+  hideNodeDropdown();
   INFO.textContent = 'Click an element to select it';
 }
 
@@ -90,6 +115,7 @@ toolBtns.forEach(btn => {
       // If shape was already active, just toggle the dropdown
       if (wasActive) {
         shapeDropdown.classList.toggle('show');
+        hideNodeDropdown();
         return;
       }
 
@@ -99,11 +125,33 @@ toolBtns.forEach(btn => {
 
       deselect();
       showShapeDropdown();
+      hideNodeDropdown();
       return;
     }
 
-    // For non-shape tools, hide dropdown and proceed normally
+    // Node tool: show dropdown instead of immediately activating
+    if (tool === 'node') {
+      const wasActive = btn.classList.contains('active');
+
+      if (wasActive) {
+        nodeDropdown.classList.toggle('show');
+        hideShapeDropdown();
+        return;
+      }
+
+      toolBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      setCurrentTool('node');
+
+      deselect();
+      showNodeDropdown();
+      hideShapeDropdown();
+      return;
+    }
+
+    // For non-dropdown tools, hide dropdowns and proceed normally
     hideShapeDropdown();
+    hideNodeDropdown();
 
     toolBtns.forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -119,7 +167,9 @@ toolBtns.forEach(btn => {
         INFO.textContent = 'Click the canvas to place an oval';
         break;
       case 'node':
-        INFO.textContent = 'Click the canvas to place a node';
+        INFO.textContent = nodeMode === 'circle'
+          ? 'Click the canvas to place a node'
+          : 'Click the canvas to place a triangle node';
         break;
     }
   });
@@ -144,16 +194,39 @@ shapeOptions.forEach(opt => {
   });
 });
 
-// ── Hide dropdown on outside click ──────────────────────
+// ── Node option clicks ─────────────────────────────────
+
+nodeOptions.forEach(opt => {
+  opt.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const mode = opt.getAttribute('data-mode');
+    setNodeMode(mode);
+    updateNodeLabel();
+    hideNodeDropdown();
+
+    // Update the info text
+    if (currentTool === 'node') {
+      INFO.textContent = mode === 'circle'
+        ? 'Click the canvas to place a node'
+        : 'Click the canvas to place a triangle node';
+    }
+  });
+});
+
+// ── Hide dropdowns on outside click ──────────────────────
 
 document.addEventListener('click', (e) => {
   if (shapeToolWrap && shapeToolWrap.contains(e.target)) return;
+  if (nodeToolWrap && nodeToolWrap.contains(e.target)) return;
   hideShapeDropdown();
+  hideNodeDropdown();
 });
 
 document.addEventListener('contextmenu', (e) => {
   if (shapeToolWrap && shapeToolWrap.contains(e.target)) return;
+  if (nodeToolWrap && nodeToolWrap.contains(e.target)) return;
   hideShapeDropdown();
+  hideNodeDropdown();
 });
 
 // ── SVG background click ─────────────────────────────────────
@@ -191,7 +264,7 @@ svg.addEventListener('click', (e) => {
 
     case 'node':
       deselect();
-      createNode(snapToGrid(pos.x), snapToGrid(pos.y));
+      createNode(snapToGrid(pos.x), snapToGrid(pos.y), nodeMode);
       updateLegend();
       switchToSelectTool();
       break;
@@ -343,6 +416,7 @@ function copyToClipboard() {
         cx: parseFloat(el.getAttribute('cx')),
         cy: parseFloat(el.getAttribute('cy')),
         fill: el.getAttribute('fill'),
+        nodeShape: el._nodeShape || 'circle',
       });
     }
   }
@@ -381,7 +455,7 @@ function pasteFromClipboard() {
       }
       newElements.push(el);
     } else if (data.type === 'node') {
-      const el = createNode(snapToGrid(data.cx + offset), snapToGrid(data.cy + offset));
+      const el = createNode(snapToGrid(data.cx + offset), snapToGrid(data.cy + offset), data.nodeShape || 'circle');
       if (data.fill) {
         el.setAttribute('fill', data.fill);
         el.setAttribute('stroke', darkenColor(data.fill, 40));
@@ -441,10 +515,16 @@ document.addEventListener('keydown', (e) => {
   // Ctrl+A / Cmd+A: select all
   if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
     e.preventDefault();
-    const all = svg.querySelectorAll('ellipse, g');
+    const all = svg.querySelectorAll('ellipse, polygon, g');
     if (all.length === 0) return;
     deselect();
     for (const el of all) {
+      if (el.tagName === 'polygon') {
+        if (el._nodeShape === 'triangle') {
+          selectElement(el, 'node', true);
+        }
+        continue;
+      }
       const type = el.tagName === 'ellipse'
         ? (parseFloat(el.getAttribute('rx')) <= NODE_RADIUS + 2 ? 'node' : 'ellipse')
         : 'arrow';
@@ -664,6 +744,18 @@ function exportToPNG() {
         maxX = Math.max(maxX, cx + rx);
         minY = Math.min(minY, cy - ry);
         maxY = Math.max(maxY, cy + ry);
+        hasObjects = true;
+      }
+    } else if (child.tagName === 'polygon') {
+      // Triangle nodes
+      const cx = parseFloat(child.getAttribute('cx'));
+      const cy = parseFloat(child.getAttribute('cy'));
+      const rx = parseFloat(child.getAttribute('rx'));
+      if (!isNaN(cx) && !isNaN(cy) && !isNaN(rx)) {
+        minX = Math.min(minX, cx - rx);
+        maxX = Math.max(maxX, cx + rx);
+        minY = Math.min(minY, cy - rx);
+        maxY = Math.max(maxY, cy + rx);
         hasObjects = true;
       }
     } else if (child.tagName === 'g') {

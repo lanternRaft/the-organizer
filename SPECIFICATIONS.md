@@ -20,11 +20,15 @@ A toolbar at the bottom center of the screen provides 3 tool modes. After placin
 |---|---|---|
 | Select | Select | Click/drag to select and move elements. Default mode. Also used for arrow creation — see Arrow section below. |
 | Shape | Oval / Circle | Dropdown button; click to toggle between Oval and Circle. Click canvas to place the shape. |
-| Node | Node | Click canvas to place a small fixed-size dot. |
+| Node | Circle / Triangle | Dropdown button; click to toggle between Circle and Triangle. Click canvas to place the node. |
 
 ### Shape Tool Dropdown
 
 The Oval/Circle button opens a small dropdown above it. Selecting a mode updates the button label and the info text. The dropdown closes on outside click.
+
+### Node Tool Dropdown
+
+The Circle/Triangle button (Node tool) opens a small dropdown above it, following the same UX pattern as the Shape dropdown. Selecting a mode updates the button label and the info text.
 
 ---
 
@@ -55,14 +59,24 @@ SVG `<ellipse>` elements that serve as labeled containers.
 
 ### Nodes
 
-Small fixed-size colorable dots. Implemented as `<ellipse>` elements with `rx=ry=8` for integration with the anchor/arrow system.
+Small fixed-size colorable dots. Two node modes (selected via dropdown):
 
+**Circle node** — `<ellipse>` elements with `rx=ry=NODE_RADIUS` (8px):
 - **Fixed size**: `NODE_RADIUS = 8` (rx=8, ry=8)
 - **Colorable**: Default fill `#3b82f6`
 - **No resize handles** on selection
 - **Stroke**: Same rules as shapes (darkened/lightened fill)
-- **Drag to move**: Snaps to 10px increments
-- **Placement**: Initial placement via click snaps to 10px increments
+- **4 cardinal anchor points** at N/S/E/W (standard ellipse anchors)
+
+**Triangle node** — `<polygon>` elements forming an equilateral triangle pointing up:
+- **Fixed size**: `NODE_SIZE = 8` (circumradius, same visual footprint as circle nodes)
+- **Colorable**: Default fill `#3b82f6`
+- **No resize handles** on selection
+- **Stroke**: Same rules as shapes (darkened/lightened fill)
+- **3 vertex anchor points** at top, bottomLeft, bottomRight
+- `_nodeShape = 'triangle'` stored as a JS property
+
+Both modes share the same click/drag/select/color/delete behavior.
 
 ### Arrows
 
@@ -120,19 +134,30 @@ The following module-level state tracks a drag in progress in `arrow.js`:
 
 ### Anchors
 
-Every `<ellipse>` (shapes and nodes) has 4 cardinal anchor points. Two sets of positions are maintained:
+Every `<ellipse>` (shapes and circle nodes) has 4 cardinal anchor points. Every `<polygon>` triangle node has 3 vertex anchor points. Two sets of positions are maintained per shape type:
 
 **Edge positions** (`getAnchorPoints`) — used as actual arrow endpoints:
+
+**Ellipses** (4 cardinal points):
 - **top**: `{x: cx, y: cy - ry}`
 - **left**: `{x: cx - rx, y: cy}`
 - **bottom**: `{x: cx, y: cy + ry}`
 - **right**: `{x: cx + rx, y: cy}`
 
-**Dot positions** (`getAnchorDotPoints`) — each offset `ANCHOR_OFFSET = 5` px outward, used for dot rendering and snap hit-testing so the visible handle and snap zone match:
+**Triangle nodes** (3 vertex points):
+- **top**: top vertex of the equilateral triangle
+- **bottomLeft**: bottom-left vertex
+- **bottomRight**: bottom-right vertex
+
+**Dot positions** (`getAnchorDotPoints`) — each offset `ANCHOR_OFFSET = 5` px outward along the radial direction, used for dot rendering and snap hit-testing:
+
+**Ellipses**:
 - **top**: `{x: cx, y: cy - ry - 5}`
 - **left**: `{x: cx - rx - 5, y: cy}`
 - **bottom**: `{x: cx, y: cy + ry + 5}`
 - **right**: `{x: cx + rx + 5, y: cy}`
+
+**Triangle nodes**: Each dot is offset 5px outward from the vertex along the direction from center to that vertex.
 
 `findAnchorNear` snaps based on dot positions but returns the edge `anchorPos` so arrows connect at the ellipse boundary.
 
@@ -322,7 +347,7 @@ When exporting to PNG (Export PNG from hamburger menu), the export computation u
 In-memory clipboard (`_clipboard` array) stores serialized copies of selected elements:
 
 - **Shapes**: `{ type, cx, cy, rx, ry, fill, text }`
-- **Nodes**: `{ type, cx, cy, fill }`
+- **Nodes**: `{ type, cx, cy, fill, nodeShape }` — `nodeShape` is `'circle'` or `'triangle'` (default `'circle'` for backward compat)
 - **Arrows**: `{ type, x1, y1, x2, y2, offset, color }`
 
 Pasted elements are offset by +20px from original and become selected.
@@ -378,11 +403,11 @@ The `serializeCanvas()` function in `storage.js` produces a JSON object:
 {
   "elements": [
     { "type": "ellipse", "cx", "cy", "rx", "ry", "fill", "text" },
-    { "type": "node", "cx", "cy", "fill" },
+    { "type": "node", "cx", "cy", "fill", "nodeShape" },
     {
       "type": "arrow",
       "points": [{"x","y"}, ...],
-      "anchors": [{"end":"start"|"end","elementIndex":N,"anchorLabel":"top"|"left"|"bottom"|"right"}],
+      "anchors": [{"end":"start"|"end","elementIndex":N,"anchorLabel":"top"|"left"|"bottom"|"right"|"bottomLeft"|"bottomRight"}],
       "direction": "mono"|"dual"|"none",
       "color": "#hex"
     }
@@ -390,6 +415,8 @@ The `serializeCanvas()` function in `storage.js` produces a JSON object:
   "legend": [["#color", {"customName":"..."}], ...]
 }
 ```
+
+`nodeShape` is `"triangle"` for triangle nodes; absent or `undefined` means circle node (backward compat). See the Anchors section for triangle-specific anchor labels.
 
 Anchor references use **element-index pointers** (the index of the referenced ellipse/node among non-`<defs>` children in the serialized array), so they can be reconstructed on deserialization.
 
@@ -450,6 +477,7 @@ These JavaScript properties are attached directly to SVG DOM elements and **must
 
 | Property | Element | Purpose |
 |---|---|---|
+| `_nodeShape` | `<ellipse>`, `<polygon>` | Node shape type: `'circle'` or `'triangle'` |
 | `_text` | `<ellipse>` | Label text string |
 | `_textEl` | `<ellipse>` | `<text>` child element |
 | `_textLines` | `<ellipse>` | Cached wrapped lines |

@@ -3,7 +3,7 @@
 import {
   svg, HANDLE_SIZE, handles, selected, selectedType,
   selectedSet, selectedTypes,
-  INFO, selMenu, colorPalette, legendEl, legendColors, currentTool, shapeMode,
+  INFO, selMenu, colorPalette, legendEl, legendColors, currentTool, shapeMode, nodeMode,
   setSelected, clearSelected, notifyCanvasChanged, curveModeArrows
 } from './state.js';
 
@@ -159,7 +159,9 @@ export function deselect() {
         : 'Click the canvas to place an oval';
       break;
     case 'node':
-      INFO.textContent = 'Click the canvas to place a node';
+      INFO.textContent = nodeMode === 'circle'
+        ? 'Click the canvas to place a node'
+        : 'Click the canvas to place a triangle node';
       break;
   }
 }
@@ -657,7 +659,7 @@ export function showLineHandles(el) {
 // ── Legend ──────────────────────────────────────────────
 
 export function updateLegend() {
-  const ellipses = svg.querySelectorAll('ellipse');
+  const ellipses = svg.querySelectorAll('ellipse, polygon');
   const paths = svg.querySelectorAll('path');
   const colorsInUse = new Map(); // color -> type
 
@@ -761,7 +763,7 @@ function getElementsInRect(x, y, w, h) {
   const bottom = y + h;
   const found = [];
 
-  // Check ellipses (ovals + nodes) by center point
+  // Check ellipses (ovals + circle nodes) by center point
   svg.querySelectorAll('ellipse').forEach(el => {
     const cx = parseFloat(el.getAttribute('cx'));
     const cy = parseFloat(el.getAttribute('cy'));
@@ -769,6 +771,16 @@ function getElementsInRect(x, y, w, h) {
       const rx = parseFloat(el.getAttribute('rx'));
       const type = rx <= 10 ? 'node' : 'ellipse';
       found.push({ el, type });
+    }
+  });
+
+  // Check polygons (triangle nodes) by center point
+  svg.querySelectorAll('polygon').forEach(el => {
+    if (el._nodeShape !== 'triangle') return;
+    const cx = parseFloat(el.getAttribute('cx'));
+    const cy = parseFloat(el.getAttribute('cy'));
+    if (cx >= x && cx <= right && cy >= y && cy <= bottom) {
+      found.push({ el, type: 'node' });
     }
   });
 

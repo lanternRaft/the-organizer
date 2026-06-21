@@ -35,7 +35,11 @@ export function serializeCanvas() {
 
       if (rx <= NODE_RADIUS + 2) {
         // Node
-        elements.push({ type: 'node', cx, cy, fill });
+        const nodeData = { type: 'node', cx, cy, fill };
+        if (el._nodeShape === 'triangle') {
+          nodeData.nodeShape = 'triangle';
+        }
+        elements.push(nodeData);
       } else {
         // Shape / label
         elements.push({
@@ -48,6 +52,15 @@ export function serializeCanvas() {
           text: el._text || null,
         });
       }
+    } else if (el.tagName === 'polygon') {
+      // Triangle node
+      elements.push({
+        type: 'node',
+        cx: parseFloat(el.getAttribute('cx')),
+        cy: parseFloat(el.getAttribute('cy')),
+        fill: el.getAttribute('fill'),
+        nodeShape: 'triangle',
+      });
     } else if (el.tagName === 'g' && el._visPath) {
       // Arrow group
       const visPath = el._visPath;
@@ -146,7 +159,7 @@ export function loadFromLocalStorage() {
           setOvalText(el, data.text);
         }
       } else if (data.type === 'node') {
-        el = createNode(data.cx, data.cy);
+        el = createNode(data.cx, data.cy, data.nodeShape || 'circle');
         if (data.fill) {
           el.setAttribute('fill', data.fill);
           el.setAttribute('stroke', darkenColor(data.fill, 40));

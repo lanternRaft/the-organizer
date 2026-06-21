@@ -8,6 +8,7 @@ export const legendEl = document.getElementById('legend');
 
 export let currentTool = 'select'; // 'select', 'shape', or 'node'
 export let shapeMode = 'oval'; // 'oval' or 'circle'
+export let nodeMode = 'circle'; // 'circle' or 'triangle'
 export let selected = null;       // Primary SVG element (for handles/drag)
 export let selectedType = null;   // 'ellipse' or 'arrow'
 export const selectedSet = new Set();   // All selected SVG elements
@@ -29,6 +30,10 @@ export function setCurrentTool(tool) {
 
 export function setShapeMode(mode) {
   shapeMode = mode;
+}
+
+export function setNodeMode(mode) {
+  nodeMode = mode;
 }
 
 export function setSelected(el, type) {

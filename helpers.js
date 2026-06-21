@@ -67,6 +67,27 @@ export function findOvalAt(pos) {
 
 // ── Ellipse geometry ─────────────────────────────────────
 
+/**
+ * Detect if an SVG element is a triangle node.
+ */
+export function isTriangleNode(el) {
+  return el && el._nodeShape === 'triangle';
+}
+
+/**
+ * Get 3 vertices of an equilateral triangle pointing up.
+ * Used for both rendering and anchor positioning.
+ */
+export function getTriangleVertices(cx, cy, r) {
+  const cos30 = Math.cos(Math.PI / 6);
+  const sin30 = Math.sin(Math.PI / 6);
+  return {
+    top:         { x: cx,           y: cy - r },
+    bottomLeft:  { x: cx - r * cos30, y: cy + r * sin30 },
+    bottomRight: { x: cx + r * cos30, y: cy + r * sin30 },
+  };
+}
+
 export function getEllipseEdgePoint(cx, cy, rx, ry, fromX, fromY) {
   const dx = fromX - cx;
   const dy = fromY - cy;
@@ -210,7 +231,20 @@ const ARROWHEAD_ANCHOR_EXT = 15; // straight-line extension from anchor edge (sh
  * Positions: top, left, bottom, right (relative to the shape's center).
  */
 const ANCHOR_OFFSET = 5;
-export function getAnchorPoints(cx, cy, rx, ry) {
+
+/**
+ * Get anchor points at the edge of a shape.
+ * For ellipses: 4 cardinal points. For triangle nodes: 3 vertex points.
+ */
+export function getAnchorPoints(cx, cy, rx, ry, shape) {
+  if (shape === 'triangle') {
+    const verts = getTriangleVertices(cx, cy, rx);
+    return {
+      top:         { x: verts.top.x,         y: verts.top.y,         label: 'top' },
+      bottomLeft:  { x: verts.bottomLeft.x,  y: verts.bottomLeft.y,  label: 'bottomLeft' },
+      bottomRight: { x: verts.bottomRight.x, y: verts.bottomRight.y, label: 'bottomRight' },
+    };
+  }
   return {
     top:    { x: cx,      y: cy - ry,           label: 'top' },
     left:   { x: cx - rx, y: cy,                label: 'left' },
@@ -220,11 +254,24 @@ export function getAnchorPoints(cx, cy, rx, ry) {
 }
 
 /**
- * Get the 4 anchor dot positions — each offset ANCHOR_OFFSET px outward
- * from the ellipse edge. Used for dot rendering and snap hit-testing so the
- * visible handle and the snap zone match, while the arrow still ends at the edge.
+ * Get anchor dot positions — each offset ANCHOR_OFFSET px outward
+ * from the shape edge. Used for dot rendering and snap hit-testing.
  */
-export function getAnchorDotPoints(cx, cy, rx, ry) {
+export function getAnchorDotPoints(cx, cy, rx, ry, shape) {
+  if (shape === 'triangle') {
+    const verts = getTriangleVertices(cx, cy, rx);
+    const cos30 = Math.cos(Math.PI / 6);
+    const sin30 = Math.sin(Math.PI / 6);
+    // Offset outward from each vertex along the radial direction
+    const topDir = { x: 0, y: -1 };
+    const blDir  = { x: -cos30, y: sin30 };
+    const brDir  = { x: cos30,  y: sin30 };
+    return {
+      top:         { x: verts.top.x         + topDir.x * ANCHOR_OFFSET, y: verts.top.y         + topDir.y * ANCHOR_OFFSET, label: 'top' },
+      bottomLeft:  { x: verts.bottomLeft.x  + blDir.x  * ANCHOR_OFFSET, y: verts.bottomLeft.y  + blDir.y  * ANCHOR_OFFSET, label: 'bottomLeft' },
+      bottomRight: { x: verts.bottomRight.x + brDir.x  * ANCHOR_OFFSET, y: verts.bottomRight.y + brDir.y  * ANCHOR_OFFSET, label: 'bottomRight' },
+    };
+  }
   return {
     top:    { x: cx,                      y: cy - ry - ANCHOR_OFFSET, label: 'top' },
     left:   { x: cx - rx - ANCHOR_OFFSET, y: cy,                      label: 'left' },
@@ -235,20 +282,19 @@ export function getAnchorDotPoints(cx, cy, rx, ry) {
 
 /**
  * Find the nearest anchor point within ANCHOR_SNAP_RADIUS of the given position.
- * Snap detection is based on the dot's visual position (getAnchorDotPoints) so
- * hovering over the visible handle triggers correctly, but anchorPos returned is
- * the edge position used as the actual arrow endpoint.
- * Returns { ellipse, anchorPos, anchorLabel } or null.
+ * Searches both <ellipse> and <polygon> elements.
  */
 export function findAnchorNear(pos, threshold = ANCHOR_SNAP_RADIUS) {
+  // Search ellipses (circles, shapes)
   const ellipses = svg.querySelectorAll('ellipse');
   let best = null;
   let bestDist = threshold;
 
   for (const el of ellipses) {
     const { cx, cy, rx, ry } = ellipseAttrs(el);
-    const dotPoints  = getAnchorDotPoints(cx, cy, rx, ry);
-    const edgePoints = getAnchorPoints(cx, cy, rx, ry);
+    const shape = isTriangleNode(el) ? 'triangle' : 'ellipse';
+    const dotPoints  = getAnchorDotPoints(cx, cy, rx, ry, shape);
+    const edgePoints = getAnchorPoints(cx, cy, rx, ry, shape);
     for (const [label, dotPos] of Object.entries(dotPoints)) {
       const dx = pos.x - dotPos.x;
       const dy = pos.y - dotPos.y;
@@ -259,17 +305,38 @@ export function findAnchorNear(pos, threshold = ANCHOR_SNAP_RADIUS) {
       }
     }
   }
+
+  // Search polygons (triangle nodes)
+  const polygons = svg.querySelectorAll('polygon');
+  for (const el of polygons) {
+    if (!isTriangleNode(el)) continue;
+    const cx = parseFloat(el.getAttribute('cx'));
+    const cy = parseFloat(el.getAttribute('cy'));
+    const r  = parseFloat(el.getAttribute('rx'));
+    const dotPoints  = getAnchorDotPoints(cx, cy, r, r, 'triangle');
+    const edgePoints = getAnchorPoints(cx, cy, r, r, 'triangle');
+    for (const [label, dotPos] of Object.entries(dotPoints)) {
+      const dx = pos.x - dotPos.x;
+      const dy = pos.y - dotPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = { ellipse: el, anchorPos: edgePoints[label], anchorLabel: label };
+      }
+    }
+  }
+
   return best;
 }
 
 /**
- * Create anchor dots for a single ellipse and cache them.
- * Dots have pointer-events: auto and store refs to their parent ellipse + label.
+ * Create anchor dots for a single element (ellipse or polygon) and cache them.
  */
 function _createDotsForEllipse(el) {
   if (_anchorDots.has(el)) return;
+  const shape = isTriangleNode(el) ? 'triangle' : 'ellipse';
   const { cx, cy, rx, ry } = ellipseAttrs(el);
-  const anchors = getAnchorDotPoints(cx, cy, rx, ry);
+  const anchors = getAnchorDotPoints(cx, cy, rx, ry, shape);
   const dots = [];
   for (const [label, pos] of Object.entries(anchors)) {
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -292,10 +359,10 @@ function _createDotsForEllipse(el) {
 }
 
 /**
- * Show anchor dots for a specific ellipse (creates them if needed).
+ * Show anchor dots for a specific element (creates them if needed).
  */
 export function showAnchorsForEllipse(el) {
-  if (!el.parentNode) return;
+  if (!el || !el.parentNode) return;
   _createDotsForEllipse(el);
   const dots = _anchorDots.get(el);
   if (dots) {
@@ -321,8 +388,8 @@ export function hideAnchorsForEllipse(el) {
  * Show anchor dots on all ellipses (legacy compat).
  */
 export function showAnchors() {
-  const ellipses = svg.querySelectorAll('ellipse');
-  for (const el of ellipses) {
+  const shapes = svg.querySelectorAll('ellipse, polygon');
+  for (const el of shapes) {
     showAnchorsForEllipse(el);
   }
 }
@@ -340,18 +407,19 @@ export function hideAnchors() {
 }
 
 /**
- * Update anchor dot positions for all cached ellipses (call after shapes are moved/resized).
+ * Update anchor dot positions for all cached elements (call after nodes are moved).
  */
 export function updateAnchors() {
   for (const [ellipse, dots] of _anchorDots) {
-    // Skip removed ellipses
-    if (!ellipse.parentNode) {
+    // Skip removed elements
+    if (!ellipse || !ellipse.parentNode) {
       dots.forEach(d => d.el.remove());
       _anchorDots.delete(ellipse);
       continue;
     }
+    const shape = isTriangleNode(ellipse) ? 'triangle' : 'ellipse';
     const { cx, cy, rx, ry } = ellipseAttrs(ellipse);
-    const dotAnchors = getAnchorDotPoints(cx, cy, rx, ry);
+    const dotAnchors = getAnchorDotPoints(cx, cy, rx, ry, shape);
     for (const dot of dots) {
       const pos = dotAnchors[dot.label];
       dot.el.setAttribute('cx', pos.x);
@@ -395,12 +463,16 @@ export function unhighlightAllAnchors() {
  * Get the outward direction vector for an anchor label.
  */
 function getAnchorDir(label) {
+  const cos30 = Math.cos(Math.PI / 6);
+  const sin30 = Math.sin(Math.PI / 6);
   switch (label) {
-    case 'top':    return { x: 0, y: -1 };
-    case 'left':   return { x: -1, y: 0 };
-    case 'bottom': return { x: 0, y: 1 };
-    case 'right':  return { x: 1, y: 0 };
-    default:       return { x: 0, y: 0 };
+    case 'top':         return { x: 0,      y: -1 };
+    case 'left':        return { x: -1,     y: 0 };
+    case 'bottom':      return { x: 0,      y: 1 };
+    case 'right':       return { x: 1,      y: 0 };
+    case 'bottomLeft':  return { x: -cos30, y: sin30 };
+    case 'bottomRight': return { x: cos30,  y: sin30 };
+    default:            return { x: 0,      y: 0 };
   }
 }
 
@@ -608,7 +680,8 @@ export function setArrowAttrs(group, attrs) {
 
 export function updateAnchoredArrows(ellipse) {
   const { cx, cy, rx, ry } = ellipseAttrs(ellipse);
-  const anchors = getAnchorPoints(cx, cy, rx, ry);
+  const shape = isTriangleNode(ellipse) ? 'triangle' : 'ellipse';
+  const anchors = getAnchorPoints(cx, cy, rx, ry, shape);
   const arrows = svg.querySelectorAll('g');
   arrows.forEach((group) => {
     if (!group._anchors || group._anchors.length === 0) return;
@@ -953,10 +1026,22 @@ export function startMultiDrag(e) {
     // First pass: move all ellipses/nodes
     for (const snap of snapshots) {
       if (snap.type === 'ellipse' || snap.type === 'node') {
-        snap.el.setAttribute('cx', snapToGrid(snap.cx + dx));
-        snap.el.setAttribute('cy', snapToGrid(snap.cy + dy));
+        const newCx = snapToGrid(snap.cx + dx);
+        const newCy = snapToGrid(snap.cy + dy);
+        snap.el.setAttribute('cx', newCx);
+        snap.el.setAttribute('cy', newCy);
         if (snap.type === 'ellipse') {
           updateOvalTextPosition(snap.el);
+        }
+        if (snap.el._nodeShape === 'triangle') {
+          // Update triangle polygon vertices
+          const r = parseFloat(snap.el.getAttribute('rx')) || 8;
+          const cos30 = Math.cos(Math.PI / 6);
+          const sin30 = Math.sin(Math.PI / 6);
+          const v1 = { x: newCx, y: newCy - r };
+          const v2 = { x: newCx - r * cos30, y: newCy + r * sin30 };
+          const v3 = { x: newCx + r * cos30, y: newCy + r * sin30 };
+          snap.el.setAttribute('points', `${v1.x},${v1.y} ${v2.x},${v2.y} ${v3.x},${v3.y}`);
         }
       }
     }

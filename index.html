@@ -109,12 +109,18 @@
       </div>
     </div>
 
-    <button class="tool-btn" data-tool="node" title="Node">
-      <svg width="20" height="20" viewBox="0 0 20 20">
-        <circle cx="10" cy="10" r="4" fill="none" stroke="currentColor" stroke-width="2"/>
-      </svg>
-      <span>Node</span>
-    </button>
+    <div id="node-tool-wrap">
+      <button class="tool-btn" data-tool="node" title="Node">
+        <svg width="20" height="20" viewBox="0 0 20 20">
+          <circle cx="10" cy="10" r="4" fill="none" stroke="currentColor" stroke-width="2"/>
+        </svg>
+        <span id="node-label">Circle</span>
+      </button>
+      <div id="node-dropdown">
+        <div class="node-option" data-mode="circle">Circle</div>
+        <div class="node-option" data-mode="triangle">Triangle</div>
+      </div>
+    </div>
   </div>
 
   <div id="legend"></div>

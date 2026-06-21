@@ -63,8 +63,8 @@ export function startArrowDrag(anchorEllipse, anchorLabel, anchorPos) {
   svg.appendChild(_dragPreviewLine);
 
   // Show anchors on all shapes so the user can see where to drop
-  const ellipses = svg.querySelectorAll('ellipse');
-  for (const el of ellipses) {
+  const allShapes = svg.querySelectorAll('ellipse, polygon');
+  for (const el of allShapes) {
     showAnchorsForEllipse(el);
   }
 

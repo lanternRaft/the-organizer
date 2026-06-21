@@ -112,10 +112,10 @@ svg rect {
 }
 
 /* ── Shape tool dropdown ─────────────────────────── */
-#shape-tool-wrap {
+#shape-tool-wrap, #node-tool-wrap {
   position: relative;
 }
-#shape-dropdown {
+#shape-dropdown, #node-dropdown {
   display: none;
   position: absolute;
   bottom: calc(100% + 6px);
@@ -131,10 +131,10 @@ svg rect {
   overflow: hidden;
   transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
-#shape-dropdown.show {
+#shape-dropdown.show, #node-dropdown.show {
   display: block;
 }
-.shape-option {
+.shape-option, .node-option {
   padding: 8px 16px;
   font-size: 13px;
   color: var(--text-primary);
@@ -143,10 +143,10 @@ svg rect {
   transition: background 0.15s;
   white-space: nowrap;
 }
-.shape-option:hover {
+.shape-option:hover, .node-option:hover {
   background: var(--surface-hover);
 }
-.shape-option.active-mode {
+.shape-option.active-mode, .node-option.active-mode {
   background: #3b82f6;
   color: #ffffff;
 }
