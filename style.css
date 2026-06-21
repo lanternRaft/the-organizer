@@ -545,6 +545,49 @@ body.grid-enabled #grid-toggle svg {
   background: #dc2626;
 }
 
+/* ── Zoom controls (bottom-right) ──────────────────── */
+#zoom-controls {
+  position: fixed;
+  bottom: 82px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 600;
+  user-select: none;
+}
+#zoom-controls button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background 0.2s ease, border-color 0.2s ease,
+              color 0.2s ease, box-shadow 0.2s ease, transform 0.12s;
+  backdrop-filter: blur(8px);
+}
+#zoom-controls button:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+  transform: scale(1.1);
+}
+#zoom-controls button:active {
+  transform: scale(0.93);
+}
+#zoom-controls button svg {
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+#zoom-controls button:hover svg {
+  opacity: 1;
+}
+
 /* ── Transition override for elements we animate ── */
 body, svg rect, .info, #toolbar, #shape-dropdown,
 #legend, #selection-menu, #color-palette-popup,

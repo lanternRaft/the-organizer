@@ -40,6 +40,70 @@ export function isSelected(el) {
   return selectedSet.has(el);
 }
 
+// ── Pan & Zoom (viewBox) ────────────────────────────────
+
+// Natural canvas dimensions at zoom=1 (set after the SVG is rendered)
+export let canvasWidth = 0;
+export let canvasHeight = 0;
+
+// Current viewBox state
+export const viewBox = { x: 0, y: 0, width: 0, height: 0 };
+
+/**
+ * Store the initial (unzoomed) canvas dimensions.
+ * Called once after the SVG is first rendered.
+ */
+export function initCanvasSize() {
+  const rect = svg.getBoundingClientRect();
+  canvasWidth = rect.width;
+  canvasHeight = rect.height;
+  viewBox.width = canvasWidth;
+  viewBox.height = canvasHeight;
+  viewBox.x = 0;
+  viewBox.y = 0;
+  applyViewBox();
+}
+
+/**
+ * Apply the current viewBox to the SVG element.
+ */
+export function applyViewBox() {
+  svg.setAttribute('viewBox', `${viewBox.x} ${viewBox.y} ${viewBox.width} ${viewBox.height}`);
+}
+
+/**
+ * Update viewBox values and apply them.
+ * @param {number} x
+ * @param {number} y
+ * @param {number} w
+ * @param {number} h
+ */
+export function setViewBox(x, y, w, h) {
+  viewBox.x = x;
+  viewBox.y = y;
+  viewBox.width = w;
+  viewBox.height = h;
+  applyViewBox();
+}
+
+/**
+ * Reset zoom/pan to the initial state (fit to canvas).
+ */
+export function resetViewBox() {
+  const rect = svg.getBoundingClientRect();
+  canvasWidth = rect.width;
+  canvasHeight = rect.height;
+  setViewBox(0, 0, canvasWidth, canvasHeight);
+}
+
+/**
+ * Get the current zoom level (1 = 100%).
+ */
+export function getZoomLevel() {
+  if (!canvasWidth) return 1;
+  return canvasWidth / viewBox.width;
+}
+
 // ── Canvas change notification (for auto-save) ───────────
 
 const _changeListeners = new Set();

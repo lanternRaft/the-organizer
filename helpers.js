@@ -5,8 +5,16 @@ import { svg, defs, selectedSet, selectedTypes, notifyCanvasChanged } from './st
 // ── Coordinate helpers ────────────────────────────────────
 
 export function getPos(e) {
-  const r = svg.getBoundingClientRect();
-  return { x: e.clientX - r.left, y: e.clientY - r.top };
+  const ctm = svg.getScreenCTM();
+  if (!ctm) {
+    // Fallback if SVG not yet rendered
+    const r = svg.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  const pt = svg.createSVGPoint();
+  pt.x = e.clientX;
+  pt.y = e.clientY;
+  return pt.matrixTransform(ctm.inverse());
 }
 
 export const GRID_SNAP = 10;

@@ -1,6 +1,6 @@
 // ── Entry point: initialises SVG defs, toolbar, and top-level event listeners ──
 
-import { svg, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, selMenu, colorPalette, setCurrentTool, shapeMode, setShapeMode, notifyCanvasChanged, onCanvasChange } from './state.js';
+import { svg, INFO, defs, currentTool, selected, selectedType, selectedSet, selectedTypes, selMenu, colorPalette, setCurrentTool, shapeMode, setShapeMode, notifyCanvasChanged, onCanvasChange, initCanvasSize, viewBox, setViewBox, resetViewBox, canvasWidth, canvasHeight, getZoomLevel } from './state.js';
 import { getPos, findOvalAt, findAnchorNear, getAnchorPoints, ellipseAttrs, getEllipseEdgePoint, setOvalText, updateArrowPath, updateArrowMarker, removeOvalText, showAnchors, hideAnchors, updateAnchors, wasMultiDragged, wasDragHappened, darkenColor, lightenColor, showAnchorsForEllipse, hideAnchorsForEllipse, unhighlightAllAnchors, highlightAnchorDot, snapToGrid } from './helpers.js';
 import { deselect, selectElement, updateLegend, hideContextMenu, wasSelBoxDragged } from './select.js';
 import { createShape, showTextInput, hideTextInput } from './shape.js';
@@ -454,6 +454,28 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
+  // Ctrl+= / Cmd+=: zoom in
+  if ((e.ctrlKey || e.metaKey) && (e.key === '=' || e.key === '+')) {
+    e.preventDefault();
+    zoomByFactor(ZOOM_STEP);
+    return;
+  }
+
+  // Ctrl+- / Cmd+-: zoom out
+  if ((e.ctrlKey || e.metaKey) && e.key === '-') {
+    e.preventDefault();
+    zoomByFactor(1 / ZOOM_STEP);
+    return;
+  }
+
+  // Ctrl+0 / Cmd+0: reset zoom
+  if ((e.ctrlKey || e.metaKey) && e.key === '0') {
+    e.preventDefault();
+    resetViewBox();
+    INFO.textContent = 'Zoom: 100%';
+    return;
+  }
+
   // Delete / Backspace: delete selected elements
   if ((e.key === 'Delete' || e.key === 'Backspace') && selectedSet.size > 0) {
     // Only in select tool, not when editing text
@@ -739,4 +761,217 @@ function exportToPNG() {
 exportPngBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   exportToPNG();
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ── Pan & Zoom ────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+
+// ── Initialise canvas size & viewBox ───────────────────────────
+
+function initZoomAndPan() {
+  initCanvasSize();
+}
+
+// Call after the SVG is fully rendered (next tick)
+requestAnimationFrame(() => initZoomAndPan());
+
+// Also re-initialise on resize
+let _resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(_resizeTimer);
+  _resizeTimer = setTimeout(() => {
+    // Only reset if at default zoom (no manual pan/zoom applied)
+    // Otherwise just update the stored canvas dimensions
+    const rect = svg.getBoundingClientRect();
+    // Don't auto-reset viewBox on resize — user's viewport may have changed
+    // but we want to keep their current pan/zoom. Just store new dims.
+  }, 150);
+});
+
+// ── Zoom helper: zoom around a point ──────────────────────────
+
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 20;
+const ZOOM_STEP = 1.25; // multiplier per button click
+
+/**
+ * Zoom the canvas by a factor, centered on a given point.
+ * @param {number} factor - >1 zooms in, <1 zooms out
+ * @param {number} cx  - center x in viewBox coordinates (or NaN to use viewport center)
+ * @param {number} cy  - center y in viewBox coordinates
+ */
+function zoomByFactor(factor, cx, cy) {
+  if (!canvasWidth) return; // not yet initialized
+
+  const newW = viewBox.width / factor;
+  const newH = viewBox.height / factor;
+
+  // Clamp zoom level
+  if (newW < canvasWidth / MAX_ZOOM || newW > canvasWidth / MIN_ZOOM) return;
+
+  // If center not provided, use viewport center
+  if (typeof cx !== 'number' || !isFinite(cx)) {
+    cx = viewBox.x + viewBox.width / 2;
+    cy = viewBox.y + viewBox.height / 2;
+  }
+
+  const newX = cx - (cx - viewBox.x) / factor;
+  const newY = cy - (cy - viewBox.y) / factor;
+
+  setViewBox(newX, newY, newW, newH);
+  INFO.textContent = `Zoom: ${Math.round(getZoomLevel() * 100)}%`;
+}
+
+
+
+// ── Scroll-wheel zoom ─────────────────────────────────────────
+
+svg.addEventListener('wheel', (e) => {
+  e.preventDefault();
+
+  // Distinguish touchpad two-finger scroll from mouse wheel:
+  // - Touchpad events: smooth scrolling, small delta values, often with non-zero deltaX
+  // - Mouse wheel: notch-based, larger deltaY (~100-120), deltaX typically 0
+  // - Pinch gesture: e.ctrlKey is set (macOS trackpad pinch → zoom)
+
+  const isPinchZoom = e.ctrlKey || e.metaKey;
+  const hasHorizontal = Math.abs(e.deltaX) > 2;
+  const isSmooth = Math.abs(e.deltaY) < 10;
+
+  if (isPinchZoom) {
+    // Pinch gesture on trackpad → zoom centered on cursor
+    const pos = getPos(e);
+    const factor = 1 - e.deltaY * 0.005;
+    if (factor <= 0) return;
+    zoomByFactor(factor, pos.x, pos.y);
+    return;
+  }
+
+  if (hasHorizontal || isSmooth) {
+    // Touchpad two-finger scroll → pan
+    if (canvasWidth) {
+      const scale = viewBox.width / canvasWidth;
+      setViewBox(
+        viewBox.x + e.deltaX * scale,
+        viewBox.y + e.deltaY * scale,
+        viewBox.width,
+        viewBox.height
+      );
+    }
+    return;
+  }
+
+  // Mouse wheel → zoom centered on cursor
+  const pos = getPos(e);
+  const factor = 1 - e.deltaY * 0.001;
+  if (factor <= 0) return;
+  zoomByFactor(factor, pos.x, pos.y);
+}, { passive: false });
+
+// ── Pinch-to-zoom (touch) ─────────────────────────────────────
+
+let _pinchState = null;
+
+svg.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 2) {
+    e.preventDefault();
+    const t1 = e.touches[0];
+    const t2 = e.touches[1];
+    const dx = t1.clientX - t2.clientX;
+    const dy = t1.clientY - t2.clientY;
+    _pinchState = {
+      dist: Math.sqrt(dx * dx + dy * dy),
+      midX: (t1.clientX + t2.clientX) / 2,
+      midY: (t1.clientY + t2.clientY) / 2,
+      startViewBox: { x: viewBox.x, y: viewBox.y, w: viewBox.width, h: viewBox.height },
+    };
+  }
+}, { passive: false });
+
+svg.addEventListener('touchmove', (e) => {
+  if (e.touches.length === 2 && _pinchState) {
+    e.preventDefault();
+    const t1 = e.touches[0];
+    const t2 = e.touches[1];
+    const dx = t1.clientX - t2.clientX;
+    const dy = t1.clientY - t2.clientY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    const factor = dist / _pinchState.dist;
+    const newW = _pinchState.startViewBox.w / factor;
+    const newH = _pinchState.startViewBox.h / factor;
+
+    if (newW < canvasWidth / MAX_ZOOM || newW > canvasWidth / MIN_ZOOM) return;
+
+    // Get the midpoint in current viewBox coordinates
+    // Use the stored start positions to compute a stable zoom center
+    const midPt = svg.createSVGPoint();
+    midPt.x = _pinchState.midX;
+    midPt.y = _pinchState.midY;
+    const vbMid = midPt.matrixTransform(svg.getScreenCTM().inverse());
+
+    const newX = vbMid.x - (vbMid.x - _pinchState.startViewBox.x) / factor;
+    const newY = vbMid.y - (vbMid.y - _pinchState.startViewBox.y) / factor;
+
+    setViewBox(newX, newY, newW, newH);
+  }
+}, { passive: false });
+
+svg.addEventListener('touchend', (e) => {
+  if (e.touches.length < 2) {
+    _pinchState = null;
+  }
+});
+
+// ── Middle-button pan ──────────────────────────────────────────
+
+let _panning = false;
+let _panStart = { x: 0, y: 0 };
+let _panViewBox = { x: 0, y: 0 };
+
+svg.addEventListener('mousedown', (e) => {
+  if (e.button === 1) {
+    e.preventDefault();
+    e.stopPropagation();
+    _panning = true;
+    _panStart = { x: e.clientX, y: e.clientY };
+    _panViewBox = { x: viewBox.x, y: viewBox.y };
+    svg.style.cursor = 'grabbing';
+  }
+});
+
+// Note: we must use document-level mousemove/mouseup so we don't lose
+// the drag if the cursor leaves the SVG element.
+document.addEventListener('mousemove', (e) => {
+  if (!_panning || !canvasWidth) return;
+  const scale = viewBox.width / canvasWidth;
+  setViewBox(
+    _panViewBox.x - (e.clientX - _panStart.x) * scale,
+    _panViewBox.y - (e.clientY - _panStart.y) * scale,
+    viewBox.width,
+    viewBox.height
+  );
+});
+
+document.addEventListener('mouseup', (e) => {
+  if (e.button === 1 && _panning) {
+    _panning = false;
+    svg.style.cursor = '';
+  }
+});
+
+// ── Zoom button click handlers ─────────────────────────────────
+
+document.getElementById('zoom-in').addEventListener('click', () => {
+  zoomByFactor(ZOOM_STEP);
+});
+
+document.getElementById('zoom-out').addEventListener('click', () => {
+  zoomByFactor(1 / ZOOM_STEP);
+});
+
+document.getElementById('zoom-reset').addEventListener('click', () => {
+  resetViewBox();
+  INFO.textContent = 'Zoom: 100%';
 });
