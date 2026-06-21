@@ -4,7 +4,7 @@ import {
   svg, HANDLE_SIZE, handles, selected, selectedType,
   selectedSet, selectedTypes,
   INFO, selMenu, colorPalette, legendEl, legendColors, currentTool, shapeMode,
-  setSelected, clearSelected, notifyCanvasChanged
+  setSelected, clearSelected, notifyCanvasChanged, curveModeArrows
 } from './state.js';
 
 import {
@@ -105,7 +105,7 @@ export function selectElement(el, type, additive = false) {
       el._visPath.setAttribute('stroke', '#fbbf24');
       el._visPath.setAttribute('stroke-width', '3');
       showLineHandles(el);
-      INFO.textContent = 'Drag handles to move endpoints; drag the path to add a new bend point';
+      INFO.textContent = 'Drag handles to move endpoints; use the curve button to add bend points';
     }
     updateAnchorVisibility();
   }
@@ -138,6 +138,9 @@ export function deselect() {
       el._visPath.setAttribute('stroke-width', '2');
     }
   }
+
+  // Clear curve mode for all deselected arrows
+  curveModeArrows.clear();
 
   selectedSet.clear();
   selectedTypes.clear();
@@ -200,9 +203,9 @@ function showSelectionMenu(el) {
   const rect = getElementScreenRect(el);
   if (!rect || rect.width === 0) return;
 
-  // Show/hide direction buttons based on element type
+  // Show/hide arrow-specific buttons based on element type
   const isArrow = selectedTypes.get(el) === 'arrow';
-  selMenu.querySelectorAll('.sel-dir-none, .sel-dir-mono, .sel-dir-dual, .sel-separator').forEach(btn => {
+  selMenu.querySelectorAll('.sel-dir-none, .sel-dir-mono, .sel-dir-dual, .sel-curve, .sel-separator').forEach(btn => {
     btn.style.display = isArrow ? '' : 'none';
   });
 
@@ -212,6 +215,12 @@ function showSelectionMenu(el) {
     selMenu.querySelectorAll('.sel-dir-none, .sel-dir-mono, .sel-dir-dual').forEach(btn => {
       btn.classList.toggle('active-dir', btn.getAttribute('data-dir') === dir);
     });
+
+    // Set the active curve mode state
+    const curveBtn = selMenu.querySelector('.sel-curve');
+    if (curveBtn) {
+      curveBtn.classList.toggle('active-curve', curveModeArrows.has(el));
+    }
   }
 
   // Show and measure the menu so we can compute centered position
@@ -351,6 +360,32 @@ selMenu?.querySelector('.sel-dir-mono')?.addEventListener('click', (e) => {
 selMenu?.querySelector('.sel-dir-dual')?.addEventListener('click', (e) => {
   e.stopPropagation();
   applyDirection('dual');
+});
+
+// ── Curve mode button ────────────────────────────────────
+
+function toggleCurveMode() {
+  const activeArrow = [...selectedSet].find(el => selectedTypes.get(el) === 'arrow');
+  if (!activeArrow) return;
+
+  if (curveModeArrows.has(activeArrow)) {
+    curveModeArrows.delete(activeArrow);
+  } else {
+    curveModeArrows.add(activeArrow);
+  }
+
+  // Update the button state
+  const curveBtn = selMenu.querySelector('.sel-curve');
+  if (curveBtn) {
+    curveBtn.classList.toggle('active-curve', curveModeArrows.has(activeArrow));
+  }
+  hideColorPalette();
+  notifyCanvasChanged();
+}
+
+selMenu?.querySelector('.sel-curve')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  toggleCurveMode();
 });
 
 // ── Handles ──────────────────────────────────────────────

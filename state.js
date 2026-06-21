@@ -13,6 +13,11 @@ export let selectedType = null;   // 'ellipse' or 'arrow'
 export const selectedSet = new Set();   // All selected SVG elements
 export const selectedTypes = new Map(); // SVG element -> type
 export const handles = [];
+
+// Curve mode: Set of arrow <g> elements that are in "curve mode".
+// When active, clicking on the arrow's path body inserts a waypoint.
+// Mode is toggled by the curve button in the selection menu.
+export const curveModeArrows = new Set();
 export const HANDLE_SIZE = 10;
 export const legendColors = new Map(); // color -> { customName: string | null }
 

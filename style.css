@@ -248,11 +248,13 @@ svg rect {
   margin: 0 2px;
   flex-shrink: 0;
 }
-#selection-menu .sel-btn.active-dir {
+#selection-menu .sel-btn.active-dir,
+#selection-menu .sel-btn.active-curve {
   background: #3b82f6;
   color: #fff;
 }
-#selection-menu .sel-btn.active-dir:hover {
+#selection-menu .sel-btn.active-dir:hover,
+#selection-menu .sel-btn.active-curve:hover {
   background: #2563eb;
 }
 

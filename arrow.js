@@ -2,7 +2,7 @@
 // Arrows are created by clicking/dragging from an anchor point
 // to another anchor point. Arrows not anchored on both ends are discarded.
 
-import { svg, INFO, defs, selected, selectedType, currentTool, selectedSet, selectedTypes, notifyCanvasChanged } from './state.js';
+import { svg, INFO, defs, selected, selectedType, currentTool, selectedSet, selectedTypes, notifyCanvasChanged, curveModeArrows } from './state.js';
 import {
   getPos, findOvalAt, ellipseAttrs, lineAttrs,
   getEllipseEdgePoint, updateArrowPath, setArrowAttrs,
@@ -259,10 +259,15 @@ export function createArrow(x1, y1, x2, y2, startAnchor, endAnchor, startAnchorL
     // handle's own mousedown (stopPropagation) stops the event from
     // reaching us, so we only arrive here when clicking on the path body.
     //
-    // Behaviour: insert a waypoint at the click position and immediately
-    // start dragging it. This lets users "grab and pull" the arrow to add
-    // curves in one fluid gesture. If the user releases without moving
-    // (pure click), the waypoint is left in place at the click spot.
+    // Behaviour: only insert a waypoint if curve mode is active for this
+    // arrow (activated via the "curve" button in the selection menu).
+    // When curve mode is on, clicking the path body inserts a waypoint
+    // and immediately starts dragging it so the user can "grab and pull"
+    // the arrow to add curves in one fluid gesture.
+    // If the user releases without moving, the waypoint is left in place.
+    // When curve mode is off, the mousedown is a no-op.
+
+    if (!curveModeArrows.has(group)) return;
 
     const clickPos = getPos(e);
 
