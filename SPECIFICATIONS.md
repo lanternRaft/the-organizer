@@ -327,7 +327,7 @@ A hamburger button (`#menu-btn`) in the top-left corner toggles a dropdown (`#me
 
 | Item | Action |
 |---|---|
-| **Export PNG** | Exports the canvas as a PNG image (downloads as `the-organizer-YYYY-MM-DD.png`) |
+| **Export PNG** | Exports the canvas as a PNG image framing all objects. Computes the bounding box of every shape, node, arrow, and text label, adds 40px padding, and renders the PNG at 2x retina quality. Downloads as `the-organizer-YYYY-MM-DD.png`. |
 | **Clear** | Opens the confirmation dialog to clear the canvas |
 
 The dropdown closes on outside click and on `contextmenu`.

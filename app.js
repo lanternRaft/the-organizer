@@ -638,17 +638,94 @@ function exportToPNG() {
   // Close the menu
   menuDropdown.classList.remove('show');
 
-  // Get the SVG's current rendered dimensions
-  const rect = svg.getBoundingClientRect();
-  const width = Math.round(rect.width);
-  const height = Math.round(rect.height);
+  // ── Compute bounding box of all visible objects ─────────
+  // This ensures all canvas content is framed in the export,
+  // regardless of the user's current pan/zoom viewport.
+  let minX = Infinity, minY = Infinity;
+  let maxX = -Infinity, maxY = -Infinity;
+  let hasObjects = false;
+
+  const children = svg.children;
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+
+    // Skip defs and anchor dots
+    if (child.tagName === 'defs') continue;
+    if (child.classList && child.classList.contains('anchor-point')) continue;
+
+    if (child.tagName === 'ellipse') {
+      // Shapes and nodes
+      const cx = parseFloat(child.getAttribute('cx'));
+      const cy = parseFloat(child.getAttribute('cy'));
+      const rx = parseFloat(child.getAttribute('rx'));
+      const ry = parseFloat(child.getAttribute('ry'));
+      if (!isNaN(cx) && !isNaN(cy) && !isNaN(rx) && !isNaN(ry)) {
+        minX = Math.min(minX, cx - rx);
+        maxX = Math.max(maxX, cx + rx);
+        minY = Math.min(minY, cy - ry);
+        maxY = Math.max(maxY, cy + ry);
+        hasObjects = true;
+      }
+    } else if (child.tagName === 'g') {
+      // Arrow groups — use waypoints if available, else legacy endpoints
+      if (child._points && child._points.length > 0) {
+        for (const pt of child._points) {
+          minX = Math.min(minX, pt.x);
+          maxX = Math.max(maxX, pt.x);
+          minY = Math.min(minY, pt.y);
+          maxY = Math.max(maxY, pt.y);
+          hasObjects = true;
+        }
+      } else if (child._x1 !== undefined && child._y1 !== undefined) {
+        minX = Math.min(minX, child._x1, child._x2);
+        maxX = Math.max(maxX, child._x1, child._x2);
+        minY = Math.min(minY, child._y1, child._y2);
+        maxY = Math.max(maxY, child._y1, child._y2);
+        hasObjects = true;
+      }
+    } else if (child.tagName === 'text') {
+      // Label text elements (always inside their parent shape, but include for safety)
+      const x = parseFloat(child.getAttribute('x'));
+      const y = parseFloat(child.getAttribute('y'));
+      if (!isNaN(x) && !isNaN(y)) {
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+        minY = Math.min(minY, y);
+        maxY = Math.max(maxY, y);
+        hasObjects = true;
+      }
+    }
+  }
+
+  // ── Fallback: if no objects, use viewport dimensions ────
+  let viewX, viewY, viewW, viewH;
+  let exportWidth, exportHeight;
+
+  if (!hasObjects) {
+    const rect = svg.getBoundingClientRect();
+    exportWidth = Math.round(rect.width);
+    exportHeight = Math.round(rect.height);
+    viewX = 0;
+    viewY = 0;
+    viewW = exportWidth;
+    viewH = exportHeight;
+  } else {
+    // Add 40px padding on all sides
+    const PADDING = 40;
+    viewX = minX - PADDING;
+    viewY = minY - PADDING;
+    viewW = (maxX - minX) + PADDING * 2;
+    viewH = (maxY - minY) + PADDING * 2;
+    exportWidth = Math.round(viewW);
+    exportHeight = Math.round(viewH);
+  }
 
   // ── Prepare a standalone SVG for export ─────────────────
   const exportSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   exportSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-  exportSvg.setAttribute('width', width);
-  exportSvg.setAttribute('height', height);
-  exportSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  exportSvg.setAttribute('width', exportWidth);
+  exportSvg.setAttribute('height', exportHeight);
+  exportSvg.setAttribute('viewBox', `${viewX} ${viewY} ${viewW} ${viewH}`);
 
   // Include CSS styles inline so the exported SVG renders standalone
   const styleText = `
@@ -723,11 +800,11 @@ function exportToPNG() {
   img.onload = () => {
     try {
       const canvas = document.createElement('canvas');
-      canvas.width = width * 2;  // 2x for retina-quality export
-      canvas.height = height * 2;
+      canvas.width = exportWidth * 2;  // 2x for retina-quality export
+      canvas.height = exportHeight * 2;
       const ctx = canvas.getContext('2d');
       ctx.scale(2, 2);
-      ctx.drawImage(img, 0, 0, width, height);
+      ctx.drawImage(img, 0, 0, exportWidth, exportHeight);
 
       const pngDataUrl = canvas.toDataURL('image/png');
 
