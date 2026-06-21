@@ -217,16 +217,102 @@ An auto-generated legend in the bottom-left corner that lists colors currently i
 
 ---
 
-## Keyboard Shortcuts
+## Pan & Zoom
+
+The canvas implements a **viewBox-based** pan and zoom system. Rather than applying CSS transforms to individual elements, the SVG's `viewBox` attribute is manipulated to change the visible region of the coordinate system. This means all canvas coordinates remain stable — only the viewport onto them changes.
+
+### State (`state.js`)
+
+- `canvasWidth`, `canvasHeight` — the natural (unzoomed) pixel dimensions of the SVG element, captured from `getBoundingClientRect()` on initialization
+- `viewBox` — reactive object `{ x, y, width, height }` representing the current viewBox
+- `initCanvasSize()` — captures initial dimensions and sets `viewBox` to match
+- `applyViewBox()` — writes `viewBox` to the SVG `viewBox` attribute
+- `setViewBox(x, y, w, h)` — updates `viewBox` values and applies them
+- `resetViewBox()` — resets to initial state (100% zoom, origin at 0,0), recapturing canvas dimensions
+- `getZoomLevel()` — returns `canvasWidth / viewBox.width` (1.0 = 100%)
+
+### Zoom Controls (UI)
+
+A vertical button stack in the **bottom-right corner** (`#zoom-controls`, `position: fixed; bottom: 82px; right: 16px`) provides three buttons:
+
+| Button | ID | Action | Tooltip |
+|---|---|---|---|
+| + (plus) | `zoom-in` | Zoom in by factor 1.25×, centered on viewport center | Zoom in (Ctrl+=) |
+| − (minus) | `zoom-out` | Zoom out by factor 0.8×, centered on viewport center | Zoom out (Ctrl+-) |
+| ⟳ (reset) | `zoom-reset` | Reset to 100% zoom, viewBox origin to (0,0) | Reset zoom (Ctrl+0) |
+
+Buttons include glassmorphism styling (`backdrop-filter: blur(8px)`, border, shadow) and hover/active transforms.
+
+### Zoom Limits
+
+- **Minimum zoom**: 10% (`MIN_ZOOM = 0.1`) — `viewBox.width` cannot exceed `canvasWidth / 0.1`
+- **Maximum zoom**: 2000% (`MAX_ZOOM = 20`) — `viewBox.width` cannot be smaller than `canvasWidth / 20`
+- Attempting to zoom beyond these limits silently returns without changing the viewBox
+
+### Zoom Around a Point
+
+The core function `zoomByFactor(factor, cx, cy)` zooms relative to a specific point in viewBox coordinates:
+
+1. Computes `newW = viewBox.width / factor` and `newH = viewBox.height / factor`
+2. Clamps against min/max zoom bounds
+3. If `cx`/`cy` are omitted or invalid, defaults to the current viewport center
+4. Computes new origin: `newX = cx - (cx - viewBox.x) / factor` (same for Y)
+5. Calls `setViewBox()` with the new values
+6. Updates the info bar with the current zoom percentage: `Zoom: NNN%`
+
+### Scroll-Wheel / Trackpad Zoom & Pan
+
+The SVG element listens for the `wheel` event (non-passive, with `preventDefault()`) and distinguishes three interaction types:
+
+| Gesture | Detection | Behaviour |
+|---|---|---|
+| **Mouse wheel** (notch-based) | `deltaY` ≥ 10, `deltaX` nearly 0, no Ctrl/Meta | Zoom centered on cursor position. Factor = `1 - deltaY × 0.001` |
+| **Trackpad pinch-to-zoom** (macOS) | `e.ctrlKey` or `e.metaKey` is set | Zoom centered on cursor position. Factor = `1 - deltaY × 0.005` |
+| **Trackpad two-finger scroll** (pan) | Smooth scrolling (`deltaY` < 10) or non-zero `deltaX` | Pan the viewBox by `delta × scale` where `scale = viewBox.width / canvasWidth` |
+
+All coordinates are converted from screen-space to viewBox-space using the `getPos(e)` helper (which uses `svg.createSVGPoint()` + `getScreenCTM().inverse()`).
+
+### Touch Pinch-to-Zoom
+
+Pinch-to-zoom is handled via `touchstart` / `touchmove` / `touchend` listeners:
+
+1. **`touchstart`** (2 fingers detected): Records initial distance between touch points, midpoint, and a snapshot of the current viewBox (`startViewBox`)
+2. **`touchmove`** (2 fingers, state active): Computes `factor = currentDist / initialDist`, clamps zoom bounds, then computes new viewBox centered on the stored midpoint (using `getScreenCTM().inverse()` to convert screen midpoint to viewBox coordinates)
+3. **`touchend`** (fewer than 2 fingers): Clears the pinch state
+
+### Middle-Button Pan
+
+Pressing and dragging with the **middle mouse button** (button code 1) pans the canvas:
+
+- **`mousedown`** (button 1) on SVG: Sets `_panning = true`, records `_panStart = { clientX, clientY }` and snapshots the current viewBox as `_panViewBox`. Sets cursor to `grabbing`. Prevents default and stops propagation to avoid interfering with element interactions.
+- **`mousemove`** on `document` (while panning): Computes `setViewBox(_panViewBox.x - deltaClientX × scale, _panViewBox.y - deltaClientY × scale, ...)` where `scale = viewBox.width / canvasWidth`.
+- **`mouseup`** (button 1) on `document`: Clears `_panning`, restores cursor. Document-level listeners ensure pan continues even if the cursor leaves the SVG element.
+
+### Keyboard Shortcuts
 
 | Key | Action |
 |---|---|
+| **Ctrl/Cmd + =** (or **+**) | Zoom in by 1.25×, centered on viewport center |
+| **Ctrl/Cmd + -** | Zoom out by 0.8×, centered on viewport center |
+| **Ctrl/Cmd + 0** | Reset zoom to 100% |
 | **Escape** | Hide context menu, cancel arrow placement, hide text input |
 | **Enter** | Open text editor on selected shape |
 | **Ctrl/Cmd + C** | Copy selected element(s) to clipboard |
 | **Ctrl/Cmd + V** | Paste from clipboard |
 | **Ctrl/Cmd + A** | Select all elements |
 | **Delete / Backspace** | Delete selected element(s) (Select tool only, not in text input) |
+
+### Resize Behaviour
+
+On window resize, the canvas dimensions are re-read from `getBoundingClientRect()`, but the viewBox is **not** automatically reset. The user's current pan/zoom viewport is preserved (only the `canvasWidth`/`canvasHeight` stored dimensions are updated for future scale calculations). This ensures resizing the browser window doesn't unexpectedly reset the user's view.
+
+### Interaction with Coordinate Transforms
+
+All pointer coordinate conversions (`getPos(e)` in `helpers.js`) use `svg.createSVGPoint()` + `getScreenCTM().inverse()` to convert from screen coordinates to viewBox coordinates. This ensures click/drag positions are correctly interpreted regardless of the current zoom/pan state.
+
+### Export PNG Interaction
+
+When exporting to PNG (Export PNG from hamburger menu), the export computation uses the **logical viewBox** (bounding box of all elements + padding), not the user's current viewBox. The export function creates a temporary SVG that renders at 2× resolution with the computed bounding-box viewBox, independent of the current pan/zoom viewport.
 
 ---
 
@@ -254,7 +340,7 @@ Button (top-right corner) with sun/moon icons. Toggles `data-theme` attribute on
 
 ### Info Bar
 
-Centered text at the bottom of the screen showing contextual hints based on current tool and selection state.
+Centered text at the bottom of the screen showing contextual hints based on current tool and selection state. During zoom operations, it also displays the current zoom level as `Zoom: NNN%`.
 
 ---
 

@@ -739,8 +739,10 @@ function exportToPNG() {
   // Background rect matching the current theme's background color
   const bodyBg = getComputedStyle(document.body).backgroundColor;
   const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-  bgRect.setAttribute('width', '100%');
-  bgRect.setAttribute('height', '100%');
+  bgRect.setAttribute('x', viewX);
+  bgRect.setAttribute('y', viewY);
+  bgRect.setAttribute('width', viewW);
+  bgRect.setAttribute('height', viewH);
   bgRect.setAttribute('fill', bodyBg);
   exportSvg.appendChild(bgRect);
 
@@ -764,8 +766,10 @@ function exportToPNG() {
     exportSvg.appendChild(gridDefs);
 
     const gridRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    gridRect.setAttribute('width', '100%');
-    gridRect.setAttribute('height', '100%');
+    gridRect.setAttribute('x', viewX);
+    gridRect.setAttribute('y', viewY);
+    gridRect.setAttribute('width', viewW);
+    gridRect.setAttribute('height', viewH);
     gridRect.setAttribute('fill', 'url(#export-grid)');
     exportSvg.appendChild(gridRect);
   }
